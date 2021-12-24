@@ -1,0 +1,19 @@
+#
+# Copyright (C) 2016+ AzerothCore <www.azerothcore.org>.
+# Released under GNU AGPL v3 
+# License: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
+#
+
+[worldserver]
+
+########################################
+# npc bots configuration
+########################################
+#
+#    NpcBots.Enable
+#        Description: Enable npc bot module
+#        Default:     0 - Disabled
+#                     1 - Enabled
+#
+
+NpcBots.Enable = 1
