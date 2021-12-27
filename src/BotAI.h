@@ -10,7 +10,7 @@
 #include "Player.h"
 #include "ScriptedCreature.h"
 
-#define BOT_FOLLOW_DIST  2.0f
+#define BOT_FOLLOW_DIST  4.0f
 #define BOT_FOLLOW_ANGLE (M_PI/2)
 
 enum eFollowState
@@ -19,9 +19,7 @@ enum eFollowState
     STATE_FOLLOW_INPROGRESS = 0x001,    //must always have this state for any follow
     STATE_FOLLOW_RETURNING  = 0x002,    //when returning to combat start after being in combat
     STATE_FOLLOW_PAUSED     = 0x004,    //disables following
-    STATE_FOLLOW_COMPLETE   = 0x008,    //follow is completed and may end
-    STATE_FOLLOW_PREEVENT   = 0x010,    //not implemented (allow pre event to run, before follow is initiated)
-    STATE_FOLLOW_POSTEVENT  = 0x020     //can be set at complete and allow post event to run
+    STATE_FOLLOW_COMPLETE   = 0x008     //follow is completed and may end
 };
 
 class BotAI : public ScriptedAI
@@ -56,7 +54,6 @@ public:
 public:
     void OnCreatureFinishedUpdate(uint32 uiDiff);
     void StartFollow(Player* player, uint32 factionForFollower = 0);
-    void SetFollowPaused(bool bPaused);
     void SetFollowComplete();
 
     bool HasBotState(uint32 uiBotState) { return (m_uiBotState & uiBotState); }
@@ -66,6 +63,7 @@ public:
     bool IsCasting(Unit const* u = nullptr) const { if (!u) u = me; return (u->HasUnitState(UNIT_STATE_CASTING) || IsChanneling(u) || u->IsNonMeleeSpellCast(false, false, true, false, false)); }
     bool IsSpellReady(uint32 basespell, uint32 diff) const;
     void SetSpellCooldown(uint32 basespell, uint32 msCooldown);
+    void ReduceSpellCooldown(uint32 basespell, uint32 uiDiff);
 
     Player* GetBotOwner() const { return m_master; }
     void SetBotOwner(Player* newOwner) { m_master = newOwner; }
@@ -74,6 +72,7 @@ public:
 
     void OnBotSpellGo(Spell const* spell, bool ok = true);
 
+    virtual void SummonBotPet(Position const* /*pos*/) { }
     virtual void UnSummonBotPet() { }
     virtual void OnClassSpellGo(SpellInfo const* /*spell*/) { }
 
@@ -83,9 +82,8 @@ public:
     typedef std::unordered_map<uint32 /*firstrankspellid*/, BotSpell* /*spell*/> BotSpellMap;
 
     BotSpellMap const& GetSpellMap() const { return m_spells; }
-    uint32 GetSpell(uint32 basespell) const;
+    uint32 GetBotSpellId(uint32 basespell) const;
     float CalcSpellMaxRange(uint32 spellId, bool enemy = true) const;
-    Unit* FindAOETarget(float dist) const;
 
 protected:
     virtual void UpdateBotAI(uint32 uiDiff);
@@ -110,7 +108,8 @@ private:
 
 protected:
     Player* m_master;
-    bool m_hasBotPet = false;
+    Creature* m_bot;
+    Creature* m_pet;
 
 private:
     ObjectGuid m_uiLeaderGUID;

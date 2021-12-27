@@ -7,19 +7,19 @@
 #ifndef _BOT_DREADLORD_H_
 #define _BOT_DREADLORD_H_
 
+#include "BotAI.h"
 #include "BotCommon.h"
 #include "Creature.h"
 #include "Object.h"
 #include "ScriptedCreature.h"
 #include "ScriptMgr.h"
 #include "Spell.h"
-#include "BotAI.h"
 
 enum DreadlordBaseSpells
 {
     CARRION_SWARM_1         = SPELL_CARRION_SWARM,
     SLEEP_1                 = SPELL_SLEEP,
-    INFERNO_1               = SPELL_INFERNO_METEOR_VISUAL
+    INFERNO_1               = SPELL_INFERNO
 };
 
 enum DreadlordPassives
@@ -52,21 +52,52 @@ static const std::vector<uint32> dreadlord_spells_support(FROM_ARRAY(dreadlord_s
 class BotDreadlordAI : public BotAI
 {
 private:
-    class DelayedPetUnSpawnEvent : public BasicEvent
+    class DelayedSummonInfernoEvent : public BasicEvent
     {
     public:
-        DelayedPetUnSpawnEvent(Creature const* bot, Position const* pos) : m_bot(bot) { }
+        DelayedSummonInfernoEvent(Creature* bot, Position pos) : m_bot(bot), m_pos(pos) { }
 
     protected:
         bool Execute(uint64 /*e_time*/, uint32 /*p_time*/)
         {
-            ((BotDreadlordAI*)m_bot->AI())->UnSummonBotPet();
+            if (m_bot)
+            {
+                BotDreadlordAI* ai = (BotDreadlordAI*)m_bot->AI();
+
+                if (ai)
+                {
+                    ai->SummonBotPet(&m_pos);
+                }
+            }
 
             return true;
         }
 
     private:
-        DelayedPetUnSpawnEvent(DelayedPetUnSpawnEvent const&);
+        Creature* m_bot;
+        Position m_pos;
+    };
+
+    class DelayedUnsummonInfernoEvent : public BasicEvent
+    {
+    public:
+        DelayedUnsummonInfernoEvent(Creature const* bot) : m_bot(bot) { }
+
+    protected:
+        bool Execute(uint64 /*e_time*/, uint32 /*p_time*/)
+        {
+            if (m_bot)
+            {
+                BotDreadlordAI* ai = (BotDreadlordAI*)m_bot->AI();
+
+                if (ai)
+                {
+                    ai->UnSummonBotPet();
+                }
+            }
+
+            return true;
+        }
 
     private:
         Creature const* m_bot;
@@ -76,15 +107,17 @@ public:
     BotDreadlordAI(Creature* creature);
 
 public:
+    void SummonBotPet(Position const* pos) override;
     void UnSummonBotPet() override;
     void OnClassSpellGo(SpellInfo const* spellInfo) override;
+    void SummonedCreatureDespawn(Creature* summon) override;
 
 protected:
     void UpdateBotAI(uint32 uiDiff) override;
     void CheckAura(uint32 uiDiff);
     void RefreshAura(uint32 spellId, int8 count = 1, Unit* target = nullptr) const;
     void ReduceCooldown(uint32 uiDiff) override;
-    
+
     void InitCustomeSpells() override;
 
 private:
@@ -92,7 +125,7 @@ private:
 
 private:
     uint32 m_checkAuraTimer;
-    Position m_infernoPos;
+    Position m_infernoSpwanPos;
 };
 
 class BotDreadlord : public CreatureScript

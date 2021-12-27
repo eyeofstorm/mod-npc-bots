@@ -34,8 +34,9 @@ BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
 
     m_uiBotState = STATE_FOLLOW_NONE;
 
+    m_bot = creature;
     m_master = nullptr;
-    m_hasBotPet = false;
+    m_pet = nullptr;
 }
 
 BotAI::~BotAI()
@@ -50,7 +51,7 @@ BotAI::~BotAI()
 
 void BotAI::MovementInform(uint32 motionType, uint32 pointId)
 {
-    if (motionType != POINT_MOTION_TYPE || !HasBotState(STATE_FOLLOW_INPROGRESS))
+    if (motionType != POINT_MOTION_TYPE)
     {
         return;
     }
@@ -66,7 +67,13 @@ void BotAI::MovementInform(uint32 motionType, uint32 pointId)
         }
         else
         {
-            me->DespawnOrUnsummon();
+            LOG_DEBUG("npcbots", "bot [%s] has no owner. stop follow.", m_bot->GetName().c_str());
+
+            if (HasBotState(STATE_FOLLOW_INPROGRESS))
+            {
+                RemoveBotState(STATE_FOLLOW_INPROGRESS);
+                AddBotState(STATE_FOLLOW_COMPLETE);
+            }
         }
     }
 }
@@ -78,30 +85,30 @@ void BotAI::AttackStart(Unit* who)
         return;
     }
 
-    if (me->Attack(who, true))
+    if (m_bot->Attack(who, true))
     {
-        if (me->HasUnitState(UNIT_STATE_FOLLOW))
+        if (m_bot->HasUnitState(UNIT_STATE_FOLLOW))
         {
-            me->ClearUnitState(UNIT_STATE_FOLLOW);
+            m_bot->ClearUnitState(UNIT_STATE_FOLLOW);
         }
 
         if (IsCombatMovementAllowed())
         {
-            me->GetMotionMaster()->MoveChase(who);
+            m_bot->GetMotionMaster()->MoveChase(who);
         }
     }
 }
 
 void BotAI::MoveInLineOfSight(Unit* who)
 {
-    if (me->GetVictim())
+    if (m_bot->GetVictim())
     {
         return;
     }
 
-    if (!me->HasUnitState(UNIT_STATE_STUNNED) && 
-        who->isTargetableForAttack(true, me) && 
-        who->isInAccessiblePlaceFor(me))
+    if (!m_bot->HasUnitState(UNIT_STATE_STUNNED) &&
+        who->isTargetableForAttack(true, m_bot) &&
+        who->isInAccessiblePlaceFor(m_bot))
     {
         if (AssistPlayerInCombat(who)) 
         {
@@ -109,12 +116,12 @@ void BotAI::MoveInLineOfSight(Unit* who)
         }
     }
 
-    if (me->CanStartAttack(who))
+    if (m_bot->CanStartAttack(who))
     {
-        if (me->HasUnitState(UNIT_STATE_DISTRACTED))
+        if (m_bot->HasUnitState(UNIT_STATE_DISTRACTED))
         {
-            me->ClearUnitState(UNIT_STATE_DISTRACTED);
-            me->GetMotionMaster()->Clear();
+            m_bot->ClearUnitState(UNIT_STATE_DISTRACTED);
+            m_bot->GetMotionMaster()->Clear();
         }
 
         AttackStart(who);
@@ -123,27 +130,30 @@ void BotAI::MoveInLineOfSight(Unit* who)
 
 void BotAI::EnterEvadeMode()
 {
-    me->RemoveAllAuras();
-    me->DeleteThreatList();
-    me->CombatStop(true);
-    me->SetLootRecipient(nullptr);
+    m_bot->RemoveAllAuras();
+    m_bot->DeleteThreatList();
+    m_bot->CombatStop(true);
+    m_bot->SetLootRecipient(nullptr);
 
     if (HasBotState(STATE_FOLLOW_INPROGRESS))
     {
-        LOG_DEBUG("npcbots", "BotAI left combat, returning to CombatStartPosition.");
-
-        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
+        if (m_bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
         {
+            LOG_DEBUG("npcbots", "bot [%s] left combat, returning to combat start position.", m_bot->GetName().c_str());
+
             float fPosX, fPosY, fPosZ;
-            me->GetPosition(fPosX, fPosY, fPosZ);
-            me->GetMotionMaster()->MovePoint(POINT_COMBAT_START, fPosX, fPosY, fPosZ);
+            m_bot->GetPosition(fPosX, fPosY, fPosZ);
+
+            m_bot->GetMotionMaster()->MovePoint(POINT_COMBAT_START, fPosX, fPosY, fPosZ);
         }
     }
     else
     {
-        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
+        if (m_bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
         {
-            me->GetMotionMaster()->MoveTargetedHome();
+            LOG_DEBUG("npcbots", "bot [%s] left combat, returning to home.", m_bot->GetName().c_str());
+
+            m_bot->GetMotionMaster()->MoveTargetedHome();
         }
     }
 
@@ -157,7 +167,18 @@ void BotAI::JustDied(Unit* pKiller)
         return;
     }
 
-    // TODO: npcbots JustDied
+    if (!IAmFree())
+    {
+        if (Group* grp = m_master->GetGroup())
+        {
+            if (grp->IsMember(m_bot->GetGUID()))
+            {
+                grp->SendUpdate();
+            }
+        }
+    }
+
+    BotMgr::DismissBot(m_bot);
 }
 
 void BotAI::JustRespawned()
@@ -169,9 +190,9 @@ void BotAI::JustRespawned()
         SetCombatMovement(true);
     }
 
-    if (me->GetFaction() != me->GetCreatureTemplate()->faction)
+    if (m_bot->GetFaction() != m_bot->GetCreatureTemplate()->faction)
     {
-        me->SetFaction(me->GetCreatureTemplate()->faction);
+        m_bot->SetFaction(m_bot->GetCreatureTemplate()->faction);
     }
 
     Reset();
@@ -202,18 +223,18 @@ bool BotAI::UpdateCommonBotAI(uint32 uiDiff)
     {
         m_uiUpdateTimerMedium = 500;
 
-        if (me->IsInWorld())
+        if (m_bot->IsInWorld())
         {
             if (m_master)
             {
-                if (Group const* gr = m_master->GetGroup())
+                if (Group const* grp = m_master->GetGroup())
                 {
-                    if (gr->IsMember(me->GetGUID()))
+                    if (grp->IsMember(m_bot->GetGUID()))
                     {
                         WorldPacket data;
                         BuildGrouUpdatePacket(&data);
 
-                        for (GroupReference const* itr = gr->GetFirstMember(); 
+                        for (GroupReference const* itr = grp->GetFirstMember();
                             itr != nullptr; 
                             itr = itr->next())
                         {
@@ -228,7 +249,7 @@ bool BotAI::UpdateCommonBotAI(uint32 uiDiff)
         }
     }
 
-    if (!me->IsAlive())
+    if (!m_bot->IsAlive())
     {
         return false;
     }
@@ -254,7 +275,7 @@ bool BotAI::DelayUpdateIfNeeded()
 
     if (IAmFree())
     {
-        m_uiWaitTimer = me->IsInCombat() ? 500 : urand(750, 1250);
+        m_uiWaitTimer = m_bot->IsInCombat() ? 500 : urand(750, 1250);
     }
     else if ((m_master && !m_master->GetMap()->IsRaid()))
     {
@@ -293,24 +314,24 @@ void BotAI::BuildGrouUpdatePacket(WorldPacket* data)
     }
 
     data->Initialize(SMSG_PARTY_MEMBER_STATS, 8 + 4 + byteCount);
-    *data << me->GetGUID().WriteAsPacked();
+    *data << m_bot->GetGUID().WriteAsPacked();
     *data << uint32(mask);
 
     if (mask & GROUP_UPDATE_FLAG_STATUS)
     {
         uint16 playerStatus = MEMBER_STATUS_ONLINE;
 
-        if (me->IsPvP())
+        if (m_bot->IsPvP())
         {
             playerStatus |= MEMBER_STATUS_PVP;
         }
 
-        if (!me->IsAlive())
+        if (!m_bot->IsAlive())
         {
             playerStatus |= MEMBER_STATUS_DEAD;
         }
 
-        if (me->HasByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_FFA_PVP))
+        if (m_bot->HasByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_FFA_PVP))
         {
             playerStatus |= MEMBER_STATUS_PVP_FFA;
         }
@@ -320,15 +341,15 @@ void BotAI::BuildGrouUpdatePacket(WorldPacket* data)
 
     if (mask & GROUP_UPDATE_FLAG_CUR_HP)
     {
-        *data << uint32(me->GetHealth());
+        *data << uint32(m_bot->GetHealth());
     }
 
     if (mask & GROUP_UPDATE_FLAG_MAX_HP)
     {
-        *data << uint32(me->GetMaxHealth());
+        *data << uint32(m_bot->GetMaxHealth());
     }
 
-    Powers powerType = me->getPowerType();
+    Powers powerType = m_bot->getPowerType();
 
     if (mask & GROUP_UPDATE_FLAG_POWER_TYPE)
     {
@@ -337,35 +358,35 @@ void BotAI::BuildGrouUpdatePacket(WorldPacket* data)
 
     if (mask & GROUP_UPDATE_FLAG_CUR_POWER)
     {
-        *data << uint16(me->GetPower(powerType));
+        *data << uint16(m_bot->GetPower(powerType));
     }
 
     if (mask & GROUP_UPDATE_FLAG_MAX_POWER)
     {
-        *data << uint16(me->GetMaxPower(powerType));
+        *data << uint16(m_bot->GetMaxPower(powerType));
     }
 
     if (mask & GROUP_UPDATE_FLAG_LEVEL)
     {
-        *data << uint16(me->getLevel());
+        *data << uint16(m_bot->getLevel());
     }
 
     if (mask & GROUP_UPDATE_FLAG_ZONE)
     {
-        *data << uint16(me->GetZoneId());
+        *data << uint16(m_bot->GetZoneId());
     }
 
     if (mask & GROUP_UPDATE_FLAG_POSITION)
     {
-        *data << uint16(me->GetPositionX());
-        *data << uint16(me->GetPositionY());
+        *data << uint16(m_bot->GetPositionX());
+        *data << uint16(m_bot->GetPositionY());
     }
 
     if (mask & GROUP_UPDATE_FLAG_VEHICLE_SEAT)
     {
-        if (Vehicle* veh = me->GetVehicle())
+        if (Vehicle* veh = m_bot->GetVehicle())
         {
-            *data << uint32(veh->GetVehicleInfo()->m_seatID[me->m_movementInfo.transport.seat]);
+            *data << uint32(veh->GetVehicleInfo()->m_seatID[m_bot->m_movementInfo.transport.seat]);
         }
         else
         {
@@ -376,7 +397,7 @@ void BotAI::BuildGrouUpdatePacket(WorldPacket* data)
 
 void BotAI::UpdateFollowerAI(uint32 uiDiff)
 {
-    Unit* victim = me->GetVictim();
+    Unit* victim = m_bot->GetVictim();
 
     if (HasBotState(STATE_FOLLOW_INPROGRESS) && !victim)
     {
@@ -384,24 +405,16 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
         {
             m_uiFollowerTimer = 1000;
 
-            if (HasBotState(STATE_FOLLOW_COMPLETE) && !HasBotState(STATE_FOLLOW_POSTEVENT))
-            {
-                LOG_DEBUG("npcbots", "BotAI is set completed, despawns.");
-                me->DespawnOrUnsummon();
-
-                return;
-            }
-
             bool bIsMaxRangeExceeded = true;
 
             if (Player* player = GetLeaderForFollower())
             {
                 if (HasBotState(STATE_FOLLOW_RETURNING))
                 {
-                    LOG_DEBUG("npcbots", "BotAI is returning to leader.");
+                    LOG_DEBUG("npcbots", "bot [%s] is returning to leader.", m_bot->GetName().c_str());
 
                     RemoveBotState(STATE_FOLLOW_RETURNING);
-                    me->GetMotionMaster()->MoveFollow(player, PET_FOLLOW_DIST, PET_FOLLOW_ANGLE);
+                    m_bot->GetMotionMaster()->MoveFollow(player, BOT_FOLLOW_DIST, BOT_FOLLOW_ANGLE);
 
                     return;
                 }
@@ -414,7 +427,7 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
                     {
                         Player* member = groupRef->GetSource();
 
-                        if (member && me->IsWithinDistInMap(member, MAX_PLAYER_DISTANCE))
+                        if (member && m_bot->IsWithinDistInMap(member, MAX_PLAYER_DISTANCE))
                         {
                             bIsMaxRangeExceeded = false;
                             break;
@@ -423,7 +436,7 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
                 }
                 else
                 {
-                    if (me->IsWithinDistInMap(player, MAX_PLAYER_DISTANCE))
+                    if (m_bot->IsWithinDistInMap(player, MAX_PLAYER_DISTANCE))
                     {
                         bIsMaxRangeExceeded = false;
                     }
@@ -432,8 +445,13 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
 
             if (bIsMaxRangeExceeded)
             {
-                LOG_DEBUG("npcbots", "BotAI failed because player/group was too far away or not found.");
-                me->DespawnOrUnsummon();
+                LOG_DEBUG(
+                    "npcbots",
+                    "bot [%s] was too far away from player/group. despawn...",
+                    m_bot->GetName().c_str());
+
+                // TODO: it's best to teleport bot to player?
+                BotMgr::DismissBot(m_bot);
 
                 return;
             }
@@ -442,6 +460,14 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
         {
             m_uiFollowerTimer -= uiDiff;
         }
+    }
+    else if (HasBotState(STATE_FOLLOW_COMPLETE))
+    {
+        LOG_DEBUG("npcbots", "bot [%s] is set completed, despawns.", m_bot->GetName().c_str());
+
+        BotMgr::DismissBot(m_bot);
+
+        return;
     }
 }
 
@@ -467,15 +493,10 @@ void BotAI::UpdateAI(uint32 uiDiff)
 
 void BotAI::StartFollow(Player* player, uint32 factionForFollower)
 {
-    if (me->GetVictim())
-    {
-        LOG_DEBUG("npcbots", "BotAI attempt to StartFollow while in combat.");
-        return;
-    }
 
     if (HasBotState(STATE_FOLLOW_INPROGRESS))
     {
-        LOG_ERROR("npcbots", "BotAI attempt to StartFollow while already following.");
+        LOG_ERROR("npcbots", "bot [%s] attempt to StartFollow while already following.", m_bot->GetName().c_str());
         return;
     }
 
@@ -484,88 +505,56 @@ void BotAI::StartFollow(Player* player, uint32 factionForFollower)
 
     if (factionForFollower)
     {
-        me->SetFaction(factionForFollower);
+        m_bot->SetFaction(factionForFollower);
     }
 
-    if (!me->GetMotionMaster())
+    if (!m_bot->GetMotionMaster())
     {
-        LOG_ERROR("npcbots", "can not follow player, because MotionMaster is not exist!!!");
+        LOG_ERROR("npcbots", "can not follow player/creature, because MotionMaster is not exist!!!");
         return;
     }
 
-    if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
+    if (m_bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
     {
-        me->GetMotionMaster()->Clear();
-        me->GetMotionMaster()->MoveIdle();
+        m_bot->GetMotionMaster()->Clear();
+        m_bot->GetMotionMaster()->MoveIdle();
 
-        LOG_DEBUG("npcbots", "BotAI start with WAYPOINT_MOTION_TYPE, set to MoveIdle.");
+        LOG_DEBUG("npcbots", "bot [%s] start with WAYPOINT_MOTION_TYPE, set to MoveIdle.", m_bot->GetName().c_str());
     }
 
-    me->SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_NONE);
+    m_bot->SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_NONE);
 
     AddBotState(STATE_FOLLOW_INPROGRESS);
 
-    me->GetMotionMaster()->MoveFollow(player, BOT_FOLLOW_DIST, BOT_FOLLOW_ANGLE);
+    m_bot->GetMotionMaster()->MoveFollow(player, BOT_FOLLOW_DIST, BOT_FOLLOW_ANGLE);
 
     LOG_DEBUG(
-        "npcbots", "BotAI start follow %s (%s)", 
-        player->GetName().c_str(), 
-        m_uiLeaderGUID.ToString().c_str());
-}
-
-void BotAI::SetFollowPaused(bool paused)
-{
-    if (!HasBotState(STATE_FOLLOW_INPROGRESS) || HasBotState(STATE_FOLLOW_COMPLETE))
-    {
-        return;
-    }
-
-    if (paused)
-    {
-        AddBotState(STATE_FOLLOW_PAUSED);
-
-        if (me->HasUnitState(UNIT_STATE_FOLLOW))
-        {
-            me->ClearUnitState(UNIT_STATE_FOLLOW);
-
-            me->StopMoving();
-            me->GetMotionMaster()->Clear();
-            me->GetMotionMaster()->MoveIdle();
-        }
-    }
-    else
-    {
-        RemoveBotState(STATE_FOLLOW_PAUSED);
-
-        if (Player* leader = GetLeaderForFollower())
-        {
-            me->GetMotionMaster()->MoveFollow(leader, BOT_FOLLOW_DIST, BOT_FOLLOW_ANGLE);
-        }
-    }
+        "npcbots", "bot [%s] start follow %s",
+        m_bot->GetName().c_str(),
+        player->GetName().c_str());
 }
 
 void BotAI::SetFollowComplete()
 {
-    if (me->HasUnitState(UNIT_STATE_FOLLOW))
+    if (m_bot->HasUnitState(UNIT_STATE_FOLLOW))
     {
-        me->ClearUnitState(UNIT_STATE_FOLLOW);
+        m_bot->ClearUnitState(UNIT_STATE_FOLLOW);
 
-        me->StopMoving();
-        me->GetMotionMaster()->Clear();
-        me->GetMotionMaster()->MoveIdle();
+        m_bot->StopMoving();
+        m_bot->GetMotionMaster()->Clear();
+        m_bot->GetMotionMaster()->MoveIdle();
+
+        if (HasBotState(STATE_FOLLOW_INPROGRESS))
+        {
+            RemoveBotState(STATE_FOLLOW_INPROGRESS);
+            AddBotState(STATE_FOLLOW_COMPLETE);
+        }
     }
-
-    if (HasBotState(STATE_FOLLOW_POSTEVENT))
-    {
-        RemoveBotState(STATE_FOLLOW_POSTEVENT);
-    }
-
-    AddBotState(STATE_FOLLOW_COMPLETE);
 }
 
 Player* BotAI::GetLeaderForFollower()
 {
-    if (Player* player = ObjectAccessor::GetPlayer(*me, m_uiLeaderGUID))
+    if (Player* player = ObjectAccessor::GetPlayer(*m_bot, m_uiLeaderGUID))
     {
         if (player->IsAlive())
         {
@@ -579,7 +568,7 @@ Player* BotAI::GetLeaderForFollower()
                 {
                     Player* member = groupRef->GetSource();
 
-                    if (member && me->IsWithinDistInMap(member, MAX_PLAYER_DISTANCE) && member->IsAlive())
+                    if (member && m_bot->IsWithinDistInMap(member, MAX_PLAYER_DISTANCE) && member->IsAlive())
                     {
                         m_uiLeaderGUID = member->GetGUID();
                         return member;
@@ -603,7 +592,7 @@ bool BotAI::AssistPlayerInCombat(Unit* who)
     }
 
     //experimental (unknown) flag not present
-    if (!(me->GetCreatureTemplate()->type_flags & CREATURE_TYPE_FLAG_CAN_ASSIST))
+    if (!(m_bot->GetCreatureTemplate()->type_flags & CREATURE_TYPE_FLAG_CAN_ASSIST))
     {
         return false;
     }
@@ -615,13 +604,13 @@ bool BotAI::AssistPlayerInCombat(Unit* who)
     }
 
     //never attack friendly
-    if (me->IsFriendlyTo(who))
+    if (m_bot->IsFriendlyTo(who))
     {
         return false;
     }
 
     //too far away and no free sight?
-    if (me->IsWithinDistInMap(who, MAX_PLAYER_DISTANCE) && me->IsWithinLOSInMap(who))
+    if (m_bot->IsWithinDistInMap(who, MAX_PLAYER_DISTANCE) && m_bot->IsWithinLOSInMap(who))
     {
         AttackStart(who);
 
@@ -667,22 +656,9 @@ bool BotAI::IsSpellReady(uint32 basespell, uint32 diff) const
         return false;
     }
 
-    if (!itr->second->enabled && !IAmFree())
-    {
-        return false;
-    }
+    BotSpell* spell = itr->second;
 
-    if (itr->second->spellId == 0)
-    {
-        return false;
-    }
-    
-    if (itr->second->cooldown > diff)
-    {
-        return false;
-    }
-
-    return true;
+    return (spell->enabled == true || IAmFree()) && spell->spellId != 0 && spell->cooldown <= diff;
 }
 
 float BotAI::CalcSpellMaxRange(uint32 spellId, bool enemy) const
@@ -694,19 +670,12 @@ float BotAI::CalcSpellMaxRange(uint32 spellId, bool enemy) const
     return maxRange;
 }
 
-uint32 BotAI::GetSpell(uint32 basespell) const
+uint32 BotAI::GetBotSpellId(uint32 basespell) const
 {
     BotSpellMap::const_iterator itr = m_spells.find(basespell);
 
     return itr != m_spells.end() && 
                     (itr->second->enabled == true || IAmFree()) ? itr->second->spellId : 0;
-}
-
-Unit* BotAI::FindAOETarget(float dist) const
-{
-    Unit* unit = me->SelectNearbyTarget(nullptr, dist);
-
-    return unit;
 }
 
 // Using first-rank spell as source, puts spell of max rank allowed for given caster in spellmap
@@ -720,7 +689,7 @@ void BotAI::InitSpellMap(uint32 basespell, bool forceadd, bool forwardRank)
         return; //invalid spell id
     }
 
-    uint8 lvl = me->getLevel();
+    uint8 lvl = m_bot->getLevel();
     uint32 spellId = forceadd ? basespell : 0;
 
     while (info != nullptr && forwardRank && (forceadd || lvl >= info->BaseLevel))
@@ -758,6 +727,23 @@ void BotAI::SetSpellCooldown(uint32 basespell, uint32 msCooldown)
     SetSpellCooldown(basespell, msCooldown);
 }
 
+void BotAI::ReduceSpellCooldown(uint32 basespell, uint32 uiDiff)
+{
+    BotSpellMap::const_iterator itr = m_spells.find(basespell);
+
+    if (itr != m_spells.end())
+    {
+        if (itr->second->cooldown > uiDiff)
+        {
+            itr->second->cooldown -= uiDiff;
+        }
+        else
+        {
+            itr->second->cooldown = 0;
+        }
+    }
+}
+
 void BotAI::OnBotSpellGo(Spell const* spell, bool ok)
 {
     SpellInfo const* curInfo = spell->GetSpellInfo();
@@ -773,7 +759,7 @@ void BotAI::OnBotSpellGo(Spell const* spell, bool ok)
 
 bool BotAI::CanBotAttackOnVehicle() const
 {
-    if (VehicleSeatEntry const* seat = me->GetVehicle() ? me->GetVehicle()->GetSeatForPassenger(me) : nullptr)
+    if (VehicleSeatEntry const* seat = m_bot->GetVehicle() ? m_bot->GetVehicle()->GetSeatForPassenger(m_bot) : nullptr)
     {
         return seat->m_flags & VEHICLE_SEAT_FLAG_CAN_ATTACK;
     }
@@ -786,7 +772,7 @@ void BotAI::Regenerate()
     m_regenTimer += m_lastUpdateDiff;
 
     // every tick
-    if (me->getPowerType() == POWER_ENERGY)
+    if (m_bot->getPowerType() == POWER_ENERGY)
     {
         RegenerateEnergy();
     }
@@ -796,32 +782,32 @@ void BotAI::Regenerate()
         m_regenTimer -= REGEN_CD;
 
         // Regen Health
-        int32 baseRegen = 0;    // TODO: calc the item bonus as base regen.
+        int32 baseRegen = 0;
 
-        if (!me->IsInCombat() ||
-            me->IsPolymorphed() ||
+        if (!m_bot->IsInCombat() ||
+            m_bot->IsPolymorphed() ||
             baseRegen > 0 ||
-            me->HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT) ||
-            me->HasAuraType(SPELL_AURA_MOD_HEALTH_REGEN_IN_COMBAT))
+            m_bot->HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT) ||
+            m_bot->HasAuraType(SPELL_AURA_MOD_HEALTH_REGEN_IN_COMBAT))
         {
-            if (me->GetHealth() < me->GetMaxHealth())
+            if (m_bot->GetHealth() < m_bot->GetMaxHealth())
             {
-                int32 add = me->IsInCombat() ? 0 : IAmFree() && !me->GetVictim() ? me->GetMaxHealth() / 32 : 5 + me->GetCreateHealth() / 256;
+                int32 add = m_bot->IsInCombat() ? 0 : IAmFree() && !m_bot->GetVictim() ? m_bot->GetMaxHealth() / 32 : 5 + m_bot->GetCreateHealth() / 256;
 
                 if (baseRegen > 0)
                 {
                     add += std::max<int32>(baseRegen / 5, 1);
                 }
 
-                if (me->IsPolymorphed())
+                if (m_bot->IsPolymorphed())
                 {
-                    add += me->GetMaxHealth() / 6;
+                    add += m_bot->GetMaxHealth() / 6;
                 }
-                else if (!me->IsInCombat() || me->HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT))
+                else if (!m_bot->IsInCombat() || m_bot->HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT))
                 {
-                    if (!me->IsInCombat())
+                    if (!m_bot->IsInCombat())
                     {
-                        Unit::AuraEffectList const& mModHealthRegenPct = me->GetAuraEffectsByType(SPELL_AURA_MOD_HEALTH_REGEN_PERCENT);
+                        Unit::AuraEffectList const& mModHealthRegenPct = m_bot->GetAuraEffectsByType(SPELL_AURA_MOD_HEALTH_REGEN_PERCENT);
 
                         for (Unit::AuraEffectList::const_iterator i = mModHealthRegenPct.begin();
                              i != mModHealthRegenPct.end();
@@ -830,38 +816,38 @@ void BotAI::Regenerate()
                             AddPct(add, (*i)->GetAmount());
                         }
 
-                        add += me->GetTotalAuraModifier(SPELL_AURA_MOD_REGEN) * REGEN_CD / 5000;
+                        add += m_bot->GetTotalAuraModifier(SPELL_AURA_MOD_REGEN) * REGEN_CD / 5000;
                     }
-                    else if (me->HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT))
+                    else if (m_bot->HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT))
                     {
-                        ApplyPct(add, me->GetTotalAuraModifier(SPELL_AURA_MOD_REGEN_DURING_COMBAT));
+                        ApplyPct(add, m_bot->GetTotalAuraModifier(SPELL_AURA_MOD_REGEN_DURING_COMBAT));
                     }
                 }
 
-                add += me->GetTotalAuraModifier(SPELL_AURA_MOD_HEALTH_REGEN_IN_COMBAT);
+                add += m_bot->GetTotalAuraModifier(SPELL_AURA_MOD_HEALTH_REGEN_IN_COMBAT);
 
                 if (add < 0)
                 {
                     add = 0;
                 }
 
-                me->ModifyHealth(add);
+                m_bot->ModifyHealth(add);
             }
         }
 
         // Regen Mana
-        if (me->GetMaxPower(POWER_MANA) > 1 &&
-            me->GetPower(POWER_MANA) < me->GetMaxPower(POWER_MANA))
+        if (m_bot->GetMaxPower(POWER_MANA) > 1 &&
+            m_bot->GetPower(POWER_MANA) < m_bot->GetMaxPower(POWER_MANA))
         {
             float addvalue;
 
-            if (me->IsUnderLastManaUseEffect())
+            if (m_bot->IsUnderLastManaUseEffect())
             {
-                addvalue = me->GetFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER);
+                addvalue = m_bot->GetFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER);
             }
             else
             {
-                addvalue = me->GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER);
+                addvalue = m_bot->GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER);
             }
 
             addvalue *= sWorld->getRate(RATE_POWER_MANA) * REGEN_CD * 0.001f; //regenTimer threshold / 1000
@@ -871,20 +857,20 @@ void BotAI::Regenerate()
                 addvalue = 0.0f;
             }
 
-            me->ModifyPower(POWER_MANA, int32(addvalue));
+            m_bot->ModifyPower(POWER_MANA, int32(addvalue));
         }
     }
 }
 
 void BotAI::RegenerateEnergy()
 {
-    uint32 curValue = me->GetPower(POWER_ENERGY);
-    uint32 maxValue = me->GetMaxPower(POWER_ENERGY);
+    uint32 curValue = m_bot->GetPower(POWER_ENERGY);
+    uint32 maxValue = m_bot->GetMaxPower(POWER_ENERGY);
 
     if (curValue < maxValue)
     {
         float addvalue = 0.01f * m_lastUpdateDiff * sWorld->getRate(RATE_POWER_ENERGY); //10 per sec
-        Unit::AuraEffectList const& ModPowerRegenPCTAuras = me->GetAuraEffectsByType(SPELL_AURA_MOD_POWER_REGEN_PERCENT);
+        Unit::AuraEffectList const& ModPowerRegenPCTAuras = m_bot->GetAuraEffectsByType(SPELL_AURA_MOD_POWER_REGEN_PERCENT);
 
         for (Unit::AuraEffectList::const_iterator i = ModPowerRegenPCTAuras.begin();
              i != ModPowerRegenPCTAuras.end();
@@ -919,11 +905,11 @@ void BotAI::RegenerateEnergy()
 
         if (curValue == maxValue || m_regenTimer >= REGEN_CD)
         {
-            me->SetPower(POWER_ENERGY, curValue);
+            m_bot->SetPower(POWER_ENERGY, curValue);
         }
         else
         {
-            me->UpdateUInt32Value(UNIT_FIELD_POWER1 + POWER_ENERGY, curValue);
+            m_bot->UpdateUInt32Value(UNIT_FIELD_POWER1 + POWER_ENERGY, curValue);
         }
     }
 }

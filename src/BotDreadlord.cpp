@@ -5,6 +5,7 @@
  */
 
 #include "BotDreadlord.h"
+#include "BotMgr.h"
 #include "Creature.h"
 
 BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)
@@ -12,21 +13,21 @@ BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)
     m_checkAuraTimer = 0;
 
     // dreadlord immunities
-    me->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_POSSESS, true);
-    me->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_CHARM, true);
-    me->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_SHAPESHIFT, true);
-    me->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_TRANSFORM, true);
-    me->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_DISARM, true);
-    me->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_DISARM_OFFHAND, true);
-    me->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_FEAR, true);
-    me->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_DISARM, true);
-    me->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_POLYMORPH, true);
-    me->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_FEAR, true);
-    me->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_HORROR, true);
-    me->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_TURN, true);
-    me->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SLEEP, true);
-    me->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SILENCE, true);
-    me->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SNARE, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_POSSESS, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_CHARM, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_SHAPESHIFT, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_TRANSFORM, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_DISARM, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_DISARM_OFFHAND, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_FEAR, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_DISARM, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_POLYMORPH, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_FEAR, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_HORROR, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_TURN, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SLEEP, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SILENCE, true);
+    m_bot->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SNARE, true);
 
     InitCustomeSpells();
 }
@@ -37,19 +38,15 @@ void BotDreadlordAI::InitCustomeSpells()
     InitSpellMap(SLEEP_1, true, false);
     InitSpellMap(INFERNO_1, true, false);
 
-    uint32 spellId;
-    SpellInfo* sinfo;
-
-    // INFERNO VISUAL (dummy summon)
-    spellId = SPELL_INFERNO_METEOR_VISUAL; //5739
-    sinfo = const_cast<SpellInfo*>(sSpellMgr->GetSpellInfo(spellId));
+    // INFERNO (dummy summon)
+    SpellInfo* sinfo = const_cast<SpellInfo*>(sSpellMgr->GetSpellInfo(INFERNO_1));
 
     sinfo->SpellFamilyName = SPELLFAMILY_WARLOCK;
     sinfo->SpellLevel = 60;
     sinfo->BaseLevel = 60;
     sinfo->RangeEntry = sSpellRangeStore.LookupEntry(4); //30 yds
     sinfo->CastTimeEntry = sSpellCastTimesStore.LookupEntry(3); //500ms
-    sinfo->RecoveryTime = 180000;
+    sinfo->RecoveryTime = 90000;
     sinfo->StartRecoveryTime = 1500;
     sinfo->StartRecoveryCategory = 133;
     sinfo->ManaCost = 175 * 5;
@@ -79,88 +76,65 @@ void BotDreadlordAI::UpdateBotAI(uint32 uiDiff)
 
     if (r < 60)
     {
-        //LOG_DEBUG("npcbots", "Have an chance to cast some spells...");
-
         if (DoSummonInfernoIfReady(uiDiff))
         {
             return;
         }
     }
 
-    // TODO: npcbots => dreadlord ai.
-
     DoMeleeAttackIfReady();
 }
 
 bool BotDreadlordAI::DoSummonInfernoIfReady(uint32 uiDiff)
 {
-    bool isSpellReady = IsSpellReady(SPELL_INFERNO_METEOR_VISUAL, uiDiff);
-    bool isInCombat = me->IsInCombat();
-    bool hasMana = me->GetPower(POWER_MANA) >= INFERNAL_COST;
+    bool isSpellReady = IsSpellReady(INFERNO_1, uiDiff);
+    bool isInCombat = m_bot->IsInCombat();
+    bool hasMana = m_bot->GetPower(POWER_MANA) >= INFERNAL_COST;
 
-    if (isSpellReady && !m_hasBotPet && isInCombat && hasMana)
+    if (isSpellReady && !m_pet && isInCombat && hasMana)
     {
-        LOG_DEBUG("npcbots", "Ready to cast spell Inferno...");
-
-        float dist = CalcSpellMaxRange(SPELL_INFERNO);
-        //LOG_DEBUG("npcbots", "Max range of Spell inferno is %.2f...", dist);
-
-        Unit* target = FindAOETarget(dist);
-
-        if (target)
+        if (m_bot->GetVictim())
         {
-            LOG_DEBUG("npcbots", "AOE target found...");
+            LOG_DEBUG("npcbots", "ready to cast spell Inferno upon [%s]...", m_bot->GetVictim()->GetName().c_str());
 
-            m_infernoPos = target->GetPosition();
-        }
-        else if (me->GetVictim())
-        {
-            LOG_DEBUG("npcbots", "Victim found...");
-
-            m_infernoPos = me->GetVictim()->GetPosition();
+            m_infernoSpwanPos = m_bot->GetVictim()->GetPosition();
         }
         else
         {
-            LOG_DEBUG("npcbots", "Near point found...");
+            LOG_DEBUG("npcbots", "ready to cast spell Inferno near by [%s]...", m_bot->GetName().c_str());
 
-            me->GetNearPoint(
-                    me,
-                    m_infernoPos.m_positionX,
-                    m_infernoPos.m_positionY,
-                    m_infernoPos.m_positionZ,
-                    me->GetObjectSize(),
-                    5.0f,
-                    0.0f);
+            m_bot->GetNearPoint(
+                        m_bot,
+                        m_infernoSpwanPos.m_positionX,
+                        m_infernoSpwanPos.m_positionY,
+                        m_infernoSpwanPos.m_positionZ,
+                        m_bot->GetObjectSize(),
+                        5.0f,
+                        0.0f);
         }
 
-        uint32 spellIdInferno = GetSpell(INFERNO_1);
-
-        if (spellIdInferno)
-        {
-            SpellCastResult result = me->CastSpell(
-                                            m_infernoPos.m_positionX,
-                                            m_infernoPos.m_positionY,
-                                            m_infernoPos.m_positionZ,
-                                            spellIdInferno,
+        // dummy summon infernal
+        SpellCastResult result = m_bot->CastSpell(
+                                            m_infernoSpwanPos.m_positionX,
+                                            m_infernoSpwanPos.m_positionY,
+                                            m_infernoSpwanPos.m_positionZ,
+                                            INFERNO_1,
                                             false);
 
-//            LOG_DEBUG(
-//                "npcbots",
-//                "Cast dummy spell(INFERNO_1 id: %u) result=%d",
-//                spellIdInferno, result);
+        if (result == SPELL_FAILED_SUCCESS || result == SPELL_CAST_OK)
+        {
+            SetSpellCooldown(INFERNO_1, 90000);
 
             return true;
         }
-    }
-    else
-    {
-//        LOG_DEBUG(
-//            "npcbots",
-//            "Can't cast spell Inferno now. isSpellReady=%s, hasInferno=%s, isInCombat=%s, hasMana=%s",
-//            isSpellReady == true ? "true" : "false",
-//            m_hasBotPet == true ? "true" : "false",
-//            isInCombat == true ? "true" : "false",
-//            hasMana == true ? "true" : "false");
+        else
+        {
+            LOG_DEBUG("npcbots", "cast spell Inferno failed...");
+
+            SetSpellCooldown(INFERNO_1, 0);
+
+            return false;
+        }
     }
 
     return false;
@@ -172,25 +146,23 @@ void BotDreadlordAI::OnClassSpellGo(SpellInfo const* spellInfo)
 
     if (baseId == INFERNO_1)
     {
-        SpellCastResult result = me->CastSpell(
-                                        m_infernoPos.m_positionX,
-                                        m_infernoPos.m_positionY,
-                                        m_infernoPos.m_positionZ,
-                                        SPELL_INFERNO,
-                                        true);
+        SpellCastResult result = m_bot->CastSpell(
+                                            m_infernoSpwanPos.m_positionX,
+                                            m_infernoSpwanPos.m_positionY,
+                                            m_infernoSpwanPos.m_positionZ,
+                                            SPELL_INFERNO_METEOR_VISUAL,
+                                            true);
 
-//        LOG_DEBUG(
-//            "npcbots",
-//              "Cast spell(SPELL_INFERNO id: %u) result=%d",
-//              SPELL_INFERNO,
-//              result);
-        
         if (result == SPELL_FAILED_SUCCESS || result == SPELL_CAST_OK)
         {
-            m_hasBotPet = true;
+            DelayedSummonInfernoEvent* summonInfernoEvent = new DelayedSummonInfernoEvent(m_bot, m_infernoSpwanPos);
+            m_bot->m_Events.AddEvent(summonInfernoEvent, m_bot->m_Events.CalculateTime(800));
+        }
+        else
+        {
+            LOG_DEBUG("npcbots", "cast spell Inferno meteor visual failed...");
 
-            DelayedPetUnSpawnEvent* spawnEvent = new DelayedPetUnSpawnEvent(me, &m_infernoPos);
-            me->m_Events.AddEvent(spawnEvent, me->m_Events.CalculateTime(180000));
+            SetSpellCooldown(INFERNO_1, 0);
         }
     }
 }
@@ -204,7 +176,7 @@ void BotDreadlordAI::CheckAura(uint32 uiDiff)
 
     m_checkAuraTimer = 10000;
 
-    if (!me->HasAura(VAMPIRIC_AURA, me->GetGUID()))
+    if (!m_bot->HasAura(VAMPIRIC_AURA, m_bot->GetGUID()))
     {
         //LOG_DEBUG("npcbots", "Refresh vampiric aura.");
         RefreshAura(VAMPIRIC_AURA);
@@ -219,8 +191,8 @@ void BotDreadlordAI::RefreshAura(uint32 spellId, int8 count, Unit* target) const
             "npcbots", 
             "BotDreadlordAI::RefreshAura(): count is out of bounds (%i) for bot %s (entry: %u)",
             int32(count), 
-            me->GetName().c_str(), 
-            me->GetEntry());
+            m_bot->GetName().c_str(),
+            m_bot->GetEntry());
 
         return;
     }
@@ -230,8 +202,8 @@ void BotDreadlordAI::RefreshAura(uint32 spellId, int8 count, Unit* target) const
         LOG_ERROR(
             "npcbots", 
             "BotDreadlordAI::RefreshAura(): spellId is 0 for bot %s (entry: %u)",
-            me->GetName().c_str(), 
-            me->GetEntry());
+            m_bot->GetName().c_str(),
+            m_bot->GetEntry());
 
         return;
     }
@@ -244,15 +216,15 @@ void BotDreadlordAI::RefreshAura(uint32 spellId, int8 count, Unit* target) const
             "npcbots", 
             "BotDreadlordAI::RefreshAura(): Invalid spellInfo for spell %u! Bot - %s (entry: %u)", 
             spellId, 
-            me->GetName().c_str(), 
-            me->GetEntry());
+            m_bot->GetName().c_str(),
+            m_bot->GetEntry());
 
         return;
     }
 
     if (!target)
     {
-        target = me;
+        target = m_bot;
     }
 
     target->RemoveAurasDueToSpell(spellId);
@@ -269,11 +241,89 @@ void BotDreadlordAI::ReduceCooldown(uint32 uiDiff)
     {
         m_checkAuraTimer -= uiDiff;
     }
+
+    ReduceSpellCooldown(INFERNO_1, uiDiff);
 }
 
-// called by BotDreadlordAI::DelayedPetSpawnEvent::Execute(...)
+// called by DelayedSummonInfernoEvent::Execute(...)
+void BotDreadlordAI::SummonBotPet(const Position *pos)
+{
+    if (m_pet)
+    {
+        m_pet->ToTempSummon()->UnSummon();
+    }
+
+    uint32 entry = BOT_PET_INFERNAL;
+
+    Creature* myPet = m_bot->SummonCreature(
+                                entry,
+                                *pos,
+                                TEMPSUMMON_MANUAL_DESPAWN);
+
+    if (myPet)
+    {
+        myPet->SetCreatorGUID(m_master->GetGUID());
+        myPet->SetOwnerGUID(m_master->GetGUID());
+        myPet->SetFaction(m_master->GetFaction());
+        myPet->m_ControlledByPlayer = !IAmFree();
+        myPet->SetPvP(m_bot->IsPvP());
+        myPet->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+        myPet->SetByteValue(UNIT_FIELD_BYTES_2, 1, m_master->GetByteValue(UNIT_FIELD_BYTES_2, 1));
+        myPet->SetUInt32Value(UNIT_CREATED_BY_SPELL, INFERNO_1);
+
+        //infernal is immune to magic
+        myPet->CastSpell(myPet, SPELL_INFERNO_EFFECT, true); //damage, stun
+        myPet->CastSpell(myPet, IMMOLATION, true);
+
+        //dreadlord immunities
+        myPet->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_SHAPESHIFT, true);
+        myPet->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_TRANSFORM, true);
+        myPet->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_FEAR, true);
+        myPet->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_POLYMORPH, true);
+        myPet->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_FEAR, true);
+        myPet->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_HORROR, true);
+        myPet->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_TURN, true);
+        myPet->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SLEEP, true);
+        myPet->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SNARE, true);
+
+        BotMgr::SetBotLevel(myPet, m_master->getLevel(), false);
+
+        BotAI* myPetAI = BotMgr::GetBotAI(myPet);
+
+        if (myPetAI)
+        {
+            myPetAI->SetBotOwner(m_master);
+            myPetAI->StartFollow(m_master);
+        }
+
+        m_pet = myPet;
+
+        DelayedUnsummonInfernoEvent* unsummonInfernoEvent = new DelayedUnsummonInfernoEvent(m_bot);
+        m_bot->m_Events.AddEvent(unsummonInfernoEvent, m_bot->m_Events.CalculateTime(30000));
+    }
+    else
+    {
+        LOG_DEBUG("npcbots", "summon infernal servant faild...");
+
+        SetSpellCooldown(INFERNO_1, 0);
+    }
+}
+
+// called by DelayedUnsummonInfernoEvent::Execute(...)
 void BotDreadlordAI::UnSummonBotPet()
 {
-    m_hasBotPet = false;
-    LOG_DEBUG("npcbots", "can cast summon inferno again...");
+    if (m_pet)
+    {
+        LOG_DEBUG("npcbots", "unsummon bot [%s]...", m_pet->GetName().c_str());
+        m_pet->ToTempSummon()->UnSummon();
+    }
+}
+
+void BotDreadlordAI::SummonedCreatureDespawn(Creature* summon)
+{
+    if (summon == m_pet)
+    {
+        LOG_DEBUG("npcbots", "sumoned bot [%s] despawned...", summon->GetName().c_str());
+        m_pet = nullptr;
+    }
 }

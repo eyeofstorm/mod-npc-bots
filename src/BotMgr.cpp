@@ -17,16 +17,7 @@ void BotMgr::PlayerHireBot(Player* owner, Creature* bot)
         return;
     }
 
-    LOG_DEBUG("npcbots", "player [%s] begin hire the bot [%s]", owner->GetGUID().ToString().c_str(), bot->GetGUID().ToString().c_str());
-
-    if (!bot->GetAI())
-    {
-        LOG_WARN("npcbots", "creature [%s] has no AI.", bot->GetGUID().ToString().c_str());
-    }
-    else 
-    {
-        LOG_DEBUG("npcbots", "creature [%s] has AI(%s).", bot->GetGUID().ToString().c_str(), bot->GetScriptName().c_str());
-    }
+    LOG_DEBUG("npcbots", "player [%s] begin hire the bot [%s]", owner->GetName().c_str(), bot->GetName().c_str());
 
     bot->SetOwnerGUID(owner->GetGUID());
     bot->SetCreatorGUID(owner->GetGUID());
@@ -39,11 +30,11 @@ void BotMgr::PlayerHireBot(Player* owner, Creature* bot)
     bot->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
     bot->m_ControlledByPlayer = true;
 
-    BotMgr::SetBotLevel(bot, owner->getLevel());
+    BotMgr::SetBotLevel(bot, owner->getLevel(), true);
 
-    LOG_DEBUG("npcbots", "begin register bot [%s]", bot->GetGUID().ToString().c_str());
+    LOG_DEBUG("npcbots", "begin register bot [%s]", bot->GetName().c_str());
     sBotsRegistry->RegisterBot(bot);
-    LOG_DEBUG("npcbots", "end register bot [%s]", bot->GetGUID().ToString().c_str());
+    LOG_DEBUG("npcbots", "end register bot [%s]", bot->GetName().c_str());
 
     BotAI* ai = GetBotAI(bot);
 
@@ -53,13 +44,17 @@ void BotMgr::PlayerHireBot(Player* owner, Creature* bot)
         ai->StartFollow(owner);
     }
 
-    LOG_DEBUG("npcbots", "bot [%s] hired!", bot->GetGUID().ToString().c_str());
+    LOG_DEBUG("npcbots", "player [%s] end hire the bot [%s]", owner->GetName().c_str(), bot->GetName().c_str());
 }
 
 bool BotMgr::DismissBot(Creature* bot)
 {
+    LOG_DEBUG("npcbots", "begin dismiss bot [%s]", bot->GetName().c_str());
+
     if (!bot)
     {
+        LOG_DEBUG("npcbots", "end dismiss bot. invalid parameter [bot]...");
+
         return false;
     }
 
@@ -67,24 +62,28 @@ bool BotMgr::DismissBot(Creature* bot)
 
     if (!entry)
     {
+        LOG_DEBUG("npcbots", "end dismiss bot. bot [%s] not found in player bots registry...", bot->GetName().c_str());
+
         return false;
     }
 
-    Player* owner = const_cast<Player*>(entry->GetBotsOwner());
     BotAI* ai = GetBotAI(bot);
 
     if (ai)
     {
+        ai->UnSummonBotPet();
         ai->SetFollowComplete();
         ai->SetBotOwner(nullptr);
-        ai->UnSummonBotPet();
     }
 
+    Player *owner = const_cast<Player *>(entry->GetBotsOwner());
     CleanupsBeforeBotRemove(owner, bot);
+    sBotsRegistry->UnregisterBot(owner, bot);
 
-    LOG_DEBUG("npcbots", "begin unregister bot [%s]", bot->GetGUID().ToString().c_str());
-    sBotsRegistry->UnregisterBot(bot);
-    LOG_DEBUG("npcbots", "end unregister bot [%s]", bot->GetGUID().ToString().c_str());
+    LOG_DEBUG("npcbots", "bot [%s] despawn...", bot->GetName().c_str());
+    bot->DespawnOrUnsummon();
+
+    LOG_DEBUG("npcbots", "end dismiss bot [%s]. dismiss bot ok...", bot->GetName().c_str());
 
     return true;
 }
@@ -134,12 +133,12 @@ BotAI* BotMgr::GetBotAI(Creature* bot)
     return ai;
 }
 
-void BotMgr::SetBotLevel(Creature* bot, uint8 level)
+void BotMgr::SetBotLevel(Creature* bot, uint8 level, bool showLevelChange)
 {
     CreatureTemplate const* cInfo = bot->GetCreatureTemplate();
     uint32 rank = 0;
 
-    bot->SetLevel(level, true);
+    bot->SetLevel(level, showLevelChange);
 
     CreatureBaseStats const* stats = sObjectMgr->GetCreatureBaseStats(level, cInfo->unit_class);
 

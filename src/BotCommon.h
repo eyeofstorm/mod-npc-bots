@@ -27,7 +27,7 @@ enum BotCommonValues
 enum BotPetTypes
 {
 // DREADLORD
-    BOT_PET_INFERNAL                    = 9000002,
+    BOT_PET_INFERNAL                    = 9000001,
 };
 
 #define FROM_ARRAY(arr) arr, arr + sizeof(arr) / sizeof(arr[0])

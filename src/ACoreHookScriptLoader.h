@@ -8,8 +8,8 @@
 #define _NPC_BOT_SCRIPTS_LOADER_H_
 
 #include "ACoreHookScript.h"
-#include "BotArthas.h"
 #include "BotDreadlord.h"
+#include "BotInfernal.h"
 
 /////////////////////////
 // Add all scripts in one
@@ -30,8 +30,8 @@ void AddNpcbotsScripts()
     /////////////////////
     // bot ai here.
     /////////////////////
-    //new BotArthas();
     new BotDreadlord();
+    new BotInfernal();
 }
 
 #endif // _NPC_BOT_SCRIPTS_LOADER_H_

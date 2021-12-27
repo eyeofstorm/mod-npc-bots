@@ -20,6 +20,9 @@ class UnitHookScript : public UnitScript
 {
 public:
     UnitHookScript() : UnitScript("npc_bots_unit_hook") { }
+
+public:
+    void OnAuraRemove(Unit* /*unit*/, AuraApplication* /*aurApp*/, AuraRemoveMode /*mode*/) override;
 };
 
 class PlayerHookScript : public PlayerScript
@@ -27,9 +30,23 @@ class PlayerHookScript : public PlayerScript
 public:
     PlayerHookScript() : PlayerScript("npc_bots_player_hook") { }
 
-    void OnLogin(Player* player) override;
-    void OnLogout(Player* player) override;
-    void OnLevelChanged(Player* player, uint8 oldlevel) override;
+    void OnLogin(Player* /*player*/) override;
+    void OnLogout(Player* /*player*/) override;
+
+    // Called when a player switches to a new zone
+    void OnUpdateZone(Player* /*player*/, uint32 /*newZone*/, uint32 /*newArea*/) override;
+
+    // Called when a player switches to a new area (more accurate than UpdateZone)
+    void OnUpdateArea(Player* /*player*/, uint32 /*oldArea*/, uint32 /*newArea*/) override;
+
+    // Called when a player changes to a new map (after moving to new map)
+    void OnMapChanged(Player* /*player*/) override;
+
+    // Called before a player is being teleported to new coords
+    bool OnBeforeTeleport(Player* /*player*/, uint32 /*mapid*/, float /*x*/, float /*y*/, float /*z*/, float /*orientation*/, uint32 /*options*/, Unit* /*target*/) override;
+
+    // Called when a player changes to a new level.
+    void OnLevelChanged(Player* /*player*/, uint8 /*oldlevel*/) override;
 };
 
 class CreatureHookScript : public AllCreatureScript
@@ -212,6 +229,7 @@ public:
         }
 
         BotMgr::PlayerHireBot(owner, bot);
+
         handler->SendSysMessage("bot successfully added."); 
 
         return true;
@@ -222,24 +240,47 @@ public:
     {
         WorldSession* session = handler->GetSession();
         Player* owner = session->GetPlayer();
-
         Unit* selectedUnit = owner->GetSelectedUnit();
 
-        if (selectedUnit)
+        if (!selectedUnit)
         {
-            Creature* bot = selectedUnit->ToCreature();
+            handler->SendSysMessage("please selete the bot you want to dismiss.");
+            handler->SetSentErrorMessage(true);
 
-            if (bot)
-            {
-                if (BotMgr::DismissBot(bot))
-                {
-                    handler->SendSysMessage("bot successfully dismissed.");
-                    return true;
-                }
-            }
+            return false;
         }
 
-        return false;
+        Creature* bot = selectedUnit->ToCreature();
+
+        if (!bot)
+        {
+            handler->SendSysMessage("for some reason, you can not dismiss this bot.");
+            handler->SetSentErrorMessage(true);
+
+            return false;
+        }
+
+        if (bot->GetCreatureTemplate()->Entry < 9000000)
+        {
+            handler->SendSysMessage("the creature that you seleted is not a bot.");
+            handler->SetSentErrorMessage(true);
+
+            return false;
+        }
+
+        if (BotMgr::DismissBot(bot))
+        {
+            handler->SendSysMessage("bot successfully dismissed.");
+
+            return true;
+        }
+        else
+        {
+            handler->SendSysMessage("bot dismiss failed.");
+            handler->SetSentErrorMessage(true);
+
+            return false;
+        }
     }
 };
 #endif

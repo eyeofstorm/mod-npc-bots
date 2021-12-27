@@ -8,7 +8,6 @@
 #define _BOT_MGR_H
 
 #include "BotAI.h"
-#include "BotPetAI.h"
 #include "Creature.h"
 #include "Map.h"
 #include "Player.h"
@@ -68,6 +67,10 @@ public:
     {
         if (!player)
         {
+            LOG_ERROR(
+                "npcbots",
+                "invalid parameter [bot] of function PlayerBotsEntry::GetEntry(Player const*)");
+
             return nullptr;
         }
 
@@ -78,24 +81,29 @@ public:
     {
         if (!bot)
         {
+            LOG_ERROR(
+                "npcbots",
+                "invalid parameter [bot] of function PlayerBotsEntry::GetEntry(Creature const*)");
+
             return nullptr;
         }
 
-        if (!bot->GetOwner())
+        if (bot->GetOwnerGUID() == ObjectGuid::Empty)
         {
+            LOG_ERROR("npcbots", "bot [%s] has no owner.", bot->GetName().c_str());
             return nullptr;
         }
 
-        PlayerBotsEntry* entry = m_registry[bot->GetOwner()->GetGUID()];
+        PlayerBotsEntry* entry = m_registry[bot->GetOwnerGUID()];
 
         return entry;
     }
 
     BotRegisterResult RegisterBot(Creature const* bot)
     {
-        if (!bot->GetOwner())
+        if (bot->GetOwnerGUID() == ObjectGuid::Empty)
         {
-            LOG_ERROR("npcbots", "bot has no owner.");
+            LOG_ERROR("npcbots", "bot [%s] has no owner.", bot->GetName().c_str());
             return BOT_HAS_NO_OWNER;
         }
 
@@ -103,53 +111,58 @@ public:
 
         if (!entry)
         {
-            LOG_DEBUG("npcbots", "bot not exist in bot registry. create one...");
-            Player* player = ObjectAccessor::FindPlayer(bot->GetOwner()->GetGUID());
+            Player* player = ObjectAccessor::FindPlayer(bot->GetOwnerGUID());
 
-            LOG_DEBUG("npcbots", "create player bots entry for [%s]", player->GetGUID().ToString().c_str());
+            LOG_DEBUG("npcbots", "player [%s] not exist in bot registry. add one...", player->GetName().c_str());
+
             entry = new PlayerBotsEntry(player);
-
-            LOG_DEBUG("npcbots", "create OK!!");
             m_registry[player->GetGUID()] = entry;
-            LOG_DEBUG("npcbots", "add entry to bot registry......OK!");
+
+            LOG_DEBUG("npcbots", "add entry to bot registry...ok!");
         }
-    
+
         BotsMap bots = entry->GetBots();
 
         if (bots[bot->GetGUID()])
         {
-            LOG_DEBUG("npcbots", "bot already exist in bot registry. skip...");
+            LOG_WARN("npcbots", "bot [%s] already exist in bot registry. skip...", bot->GetName().c_str());
             return BOT_ALREADY_REGISTERED;
         } 
         else 
         {
-            LOG_DEBUG("npcbots", "start add bot to player...");
+            LOG_DEBUG("npcbots", "start add bot [%s] to player...", bot->GetName().c_str());
             entry->AddBot(bot);
-            LOG_DEBUG("npcbots", "end add bot to player...");
+            LOG_DEBUG("npcbots", "end add bot [%s] to player...", bot->GetName().c_str());
 
             return BOT_REGISTER_SUCCESS;
         }
     }
 
-    BotRegisterResult UnregisterBot(Creature const* bot)
+    BotRegisterResult UnregisterBot(Player const* owner, Creature const* bot)
     {
-        PlayerBotsEntry* entry = GetEntry(bot);
+        LOG_DEBUG("npcbots", "begin unregister bot [%s]", bot->GetName().c_str());
 
-        if (!entry)
+        if (!owner)
         {
-            return BOT_NOT_FOUND;
+            LOG_ERROR("npcbots", "end unregister bot [%s]. bot has no owner...", bot->GetName().c_str());
+
+            return BOT_HAS_NO_OWNER;
         }
 
-        LOG_DEBUG("npcbots", "start remove bot from player...");
+        PlayerBotsEntry* entry = GetEntry(owner);
+
+        LOG_DEBUG("npcbots", "start remove bot from player [%s]...", owner->GetName().c_str());
         entry->RemoveBot(bot);
-        LOG_DEBUG("npcbots", "end remove bot from player...");
+        LOG_DEBUG("npcbots", "end remove bot from player [%s]...", owner->GetName().c_str());
 
         if (entry->GetBots().empty())
         {
-            LOG_DEBUG("npcbots", "player has no bot. so delete player bots entry from bots registry too.");
-            m_registry.erase(bot->GetOwner()->GetGUID());
+            LOG_DEBUG("npcbots", "player has no bots. so delete player bots entry from player bots registry too.");
+            m_registry.erase(owner->GetGUID());
             delete entry;
         }
+
+        LOG_DEBUG("npcbots", "end unregister bot [%s]. bot unregister success...", bot->GetName().c_str());
 
         return BOT_UNREGISTER_SUCCESS;
     }
@@ -170,7 +183,7 @@ public:
     static bool DismissBot(Creature* /*bot*/);
 
     static BotAI* GetBotAI(Creature* /*bot*/);
-    static void SetBotLevel(Creature* /*bot*/, uint8 /*level*/);
+    static void SetBotLevel(Creature* /*bot*/, uint8 /*level*/, bool showLevelChange = true);
 
     static int GetPlayerBotsCount(Player* player);
 
