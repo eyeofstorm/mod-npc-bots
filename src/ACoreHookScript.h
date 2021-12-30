@@ -33,14 +33,8 @@ public:
     void OnLogin(Player* /*player*/) override;
     void OnLogout(Player* /*player*/) override;
 
-    // Called when a player switches to a new zone
-    void OnUpdateZone(Player* /*player*/, uint32 /*newZone*/, uint32 /*newArea*/) override;
-
     // Called when a player switches to a new area (more accurate than UpdateZone)
     void OnUpdateArea(Player* /*player*/, uint32 /*oldArea*/, uint32 /*newArea*/) override;
-
-    // Called when a player changes to a new map (after moving to new map)
-    void OnMapChanged(Player* /*player*/) override;
 
     // Called before a player is being teleported to new coords
     bool OnBeforeTeleport(Player* /*player*/, uint32 /*mapid*/, float /*x*/, float /*y*/, float /*z*/, float /*orientation*/, uint32 /*options*/, Unit* /*target*/) override;
@@ -228,7 +222,7 @@ public:
             return false;
         }
 
-        BotMgr::PlayerHireBot(owner, bot);
+        BotMgr::HireBot(owner, bot);
 
         handler->SendSysMessage("bot successfully added."); 
 

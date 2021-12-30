@@ -6,6 +6,7 @@
 
 #include "BotAI.h"
 #include "BotCommon.h"
+#include "BotGridNotifiers.h"
 #include "BotMgr.h"
 #include "CellImpl.h"
 #include "Creature.h"
@@ -14,6 +15,7 @@
 #include "Log.h"
 #include "SpellAuraEffects.h"
 #include "Vehicle.h"
+#include "Unit.h"
 
 const float MAX_PLAYER_DISTANCE = 100.0f;
 
@@ -35,7 +37,6 @@ BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
     m_uiBotState = STATE_FOLLOW_NONE;
 
     m_bot = creature;
-    m_master = nullptr;
     m_pet = nullptr;
 }
 
@@ -110,8 +111,14 @@ void BotAI::MoveInLineOfSight(Unit* who)
         who->isTargetableForAttack(true, m_bot) &&
         who->isInAccessiblePlaceFor(m_bot))
     {
-        if (AssistPlayerInCombat(who)) 
+        if (AssistPlayerInCombat(who))
         {
+            LOG_DEBUG(
+                "npcbots",
+                "bot[%s] start assist player attack creature [%s].",
+                m_bot->GetName().c_str(),
+                who->GetName().c_str());
+
             return;
         }
     }
@@ -125,6 +132,9 @@ void BotAI::MoveInLineOfSight(Unit* who)
         }
 
         AttackStart(who);
+        LOG_DEBUG("npcbots", "bot[%s] start attack creature [%s].", m_bot->GetName().c_str(), who->GetName().c_str());
+
+        return;
     }
 }
 
@@ -169,11 +179,22 @@ void BotAI::JustDied(Unit* pKiller)
 
     if (!IAmFree())
     {
-        if (Group* grp = m_master->GetGroup())
+        BotsEntry *botsEntry = sBotsRegistry->GetEntry(m_bot);
+
+        if (botsEntry)
         {
-            if (grp->IsMember(m_bot->GetGUID()))
+            Unit* owner = const_cast<Unit *>(botsEntry->GetBotsOwner());
+            Player* player = owner->ToPlayer();
+
+            if (player)
             {
-                grp->SendUpdate();
+                if (Group* grp = player->GetGroup())
+                {
+                    if (grp->IsMember(m_bot->GetGUID()))
+                    {
+                        grp->SendUpdate();
+                    }
+                }
             }
         }
     }
@@ -213,7 +234,8 @@ void BotAI::OnCreatureFinishedUpdate(uint32 uiDiff)
 
 bool BotAI::UpdateCommonBotAI(uint32 uiDiff)
 {
-    ReduceCooldown(uiDiff);
+    UpdateSpellCD(uiDiff);
+    UpdateCommonTimes(uiDiff);
 
     m_lastUpdateDiff = uiDiff;
 
@@ -225,22 +247,30 @@ bool BotAI::UpdateCommonBotAI(uint32 uiDiff)
 
         if (m_bot->IsInWorld())
         {
-            if (m_master)
-            {
-                if (Group const* grp = m_master->GetGroup())
-                {
-                    if (grp->IsMember(m_bot->GetGUID()))
-                    {
-                        WorldPacket data;
-                        BuildGrouUpdatePacket(&data);
+            BotsEntry *botsEntry = sBotsRegistry->GetEntry(m_bot);
 
-                        for (GroupReference const* itr = grp->GetFirstMember();
-                            itr != nullptr; 
-                            itr = itr->next())
+            if (botsEntry)
+            {
+                Unit* owner = const_cast<Unit *>(botsEntry->GetBotsOwner());
+                Player* player = owner->ToPlayer();
+
+                if (player)
+                {
+                    if (Group const* grp = player->GetGroup())
+                    {
+                        if (grp->IsMember(m_bot->GetGUID()))
                         {
-                            if (itr->GetSource())
+                            WorldPacket data;
+                            BuildGrouUpdatePacket(&data);
+
+                            for (GroupReference const* itr = grp->GetFirstMember();
+                                itr != nullptr;
+                                itr = itr->next())
                             {
-                                itr->GetSource()->GetSession()->SendPacket(&data);
+                                if (itr->GetSource())
+                                {
+                                    itr->GetSource()->GetSession()->SendPacket(&data);
+                                }
                             }
                         }
                     }
@@ -268,7 +298,15 @@ bool BotAI::UpdateCommonBotAI(uint32 uiDiff)
 
 bool BotAI::DelayUpdateIfNeeded()
 {
-    if (m_uiWaitTimer > m_lastUpdateDiff || (m_master && !m_master->IsInWorld()))
+    Unit* owner = nullptr;
+    BotsEntry *botsEntry = sBotsRegistry->GetEntry(m_bot);
+
+    if (botsEntry)
+    {
+        owner = const_cast<Unit *>(botsEntry->GetBotsOwner());
+    }
+
+    if (m_uiWaitTimer > m_lastUpdateDiff || (owner && !owner->IsInWorld()))
     {
         return true;
     }
@@ -277,9 +315,9 @@ bool BotAI::DelayUpdateIfNeeded()
     {
         m_uiWaitTimer = m_bot->IsInCombat() ? 500 : urand(750, 1250);
     }
-    else if ((m_master && !m_master->GetMap()->IsRaid()))
+    else if ((owner && !owner->GetMap()->IsRaid()))
     {
-        m_uiWaitTimer = std::min<uint32>(uint32(50 * (BotMgr::GetPlayerBotsCount(m_master) - 1) + __rand + __rand), 500);
+        m_uiWaitTimer = std::min<uint32>(uint32(50 * (BotMgr::GetBotsCount(owner) - 1) + __rand + __rand), 500);
     }
     else
     {
@@ -395,6 +433,14 @@ void BotAI::BuildGrouUpdatePacket(WorldPacket* data)
     }
 }
 
+void BotAI::UpdateCommonTimes(uint32 uiDiff)
+{
+    if (m_potionTimer > uiDiff && (m_potionTimer < POTION_CD || !m_bot->IsInCombat()))
+    {
+        m_potionTimer -= uiDiff;
+    }
+}
+
 void BotAI::UpdateFollowerAI(uint32 uiDiff)
 {
     Unit* victim = m_bot->GetVictim();
@@ -407,38 +453,55 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
 
             bool bIsMaxRangeExceeded = true;
 
-            if (Player* player = GetLeaderForFollower())
+            if (Unit* leader = GetLeaderForFollower())
             {
                 if (HasBotState(STATE_FOLLOW_RETURNING))
                 {
                     LOG_DEBUG("npcbots", "bot [%s] is returning to leader.", m_bot->GetName().c_str());
 
                     RemoveBotState(STATE_FOLLOW_RETURNING);
-                    m_bot->GetMotionMaster()->MoveFollow(player, BOT_FOLLOW_DIST, BOT_FOLLOW_ANGLE);
+                    m_bot->GetMotionMaster()->MoveFollow(leader, BOT_FOLLOW_DIST, BOT_FOLLOW_ANGLE);
 
                     return;
                 }
 
-                if (Group* group = player->GetGroup())
-                {
-                    for (GroupReference* groupRef = group->GetFirstMember();
-                            groupRef != nullptr;
-                            groupRef = groupRef->next())
-                    {
-                        Player* member = groupRef->GetSource();
+                Player *player = leader->ToPlayer();
 
-                        if (member && m_bot->IsWithinDistInMap(member, MAX_PLAYER_DISTANCE))
+                if (player)
+                {
+                    if (Group* group = player->GetGroup())
+                    {
+                        for (GroupReference* groupRef = group->GetFirstMember();
+                             groupRef != nullptr;
+                             groupRef = groupRef->next())
+                        {
+                            Player* member = groupRef->GetSource();
+
+                            if (member && m_bot->IsWithinDistInMap(member, MAX_PLAYER_DISTANCE))
+                            {
+                                bIsMaxRangeExceeded = false;
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (m_bot->IsWithinDistInMap(leader, MAX_PLAYER_DISTANCE))
                         {
                             bIsMaxRangeExceeded = false;
-                            break;
                         }
                     }
                 }
                 else
                 {
-                    if (m_bot->IsWithinDistInMap(player, MAX_PLAYER_DISTANCE))
+                    Creature* creature = leader->ToCreature();
+
+                    if (creature)
                     {
-                        bIsMaxRangeExceeded = false;
+                        if (m_bot->IsWithinDistInMap(creature, MAX_PLAYER_DISTANCE))
+                        {
+                            bIsMaxRangeExceeded = false;
+                        }
                     }
                 }
             }
@@ -447,7 +510,7 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
             {
                 LOG_DEBUG(
                     "npcbots",
-                    "bot [%s] was too far away from player/group. despawn...",
+                    "bot [%s] was too far away from leader or leader not found. despawn...",
                     m_bot->GetName().c_str());
 
                 // TODO: it's best to teleport bot to player?
@@ -491,17 +554,15 @@ void BotAI::UpdateAI(uint32 uiDiff)
     UpdateBotAI(uiDiff);
 }
 
-void BotAI::StartFollow(Player* player, uint32 factionForFollower)
+void BotAI::StartFollow(Unit* leader, uint32 factionForFollower)
 {
-
     if (HasBotState(STATE_FOLLOW_INPROGRESS))
     {
-        LOG_ERROR("npcbots", "bot [%s] attempt to StartFollow while already following.", m_bot->GetName().c_str());
+        LOG_WARN("npcbots", "bot [%s] attempt to StartFollow while already following.", m_bot->GetName().c_str());
         return;
     }
 
-    //set variables
-    m_uiLeaderGUID = player->GetGUID();
+    m_uiLeaderGUID = leader->GetGUID();
 
     if (factionForFollower)
     {
@@ -522,16 +583,28 @@ void BotAI::StartFollow(Player* player, uint32 factionForFollower)
         LOG_DEBUG("npcbots", "bot [%s] start with WAYPOINT_MOTION_TYPE, set to MoveIdle.", m_bot->GetName().c_str());
     }
 
-    m_bot->SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_NONE);
-
     AddBotState(STATE_FOLLOW_INPROGRESS);
 
-    m_bot->GetMotionMaster()->MoveFollow(player, BOT_FOLLOW_DIST, BOT_FOLLOW_ANGLE);
+    Unit* victim = m_bot->GetVictim();
 
-    LOG_DEBUG(
-        "npcbots", "bot [%s] start follow %s",
-        m_bot->GetName().c_str(),
-        player->GetName().c_str());
+    if (victim)
+    {
+        m_bot->GetMotionMaster()->MoveChase(victim);
+
+        LOG_DEBUG(
+            "npcbots", "bot [%s] will following player [%s] when enter evade mode.",
+            m_bot->GetName().c_str(),
+            leader->GetName().c_str());
+    }
+    else
+    {
+        m_bot->GetMotionMaster()->MoveFollow(leader, BOT_FOLLOW_DIST, BOT_FOLLOW_ANGLE);
+
+        LOG_DEBUG(
+            "npcbots", "bot [%s] start follow [%s].",
+            m_bot->GetName().c_str(),
+            leader->GetName().c_str());
+    }
 }
 
 void BotAI::SetFollowComplete()
@@ -552,26 +625,33 @@ void BotAI::SetFollowComplete()
     }
 }
 
-Player* BotAI::GetLeaderForFollower()
+Unit* BotAI::GetLeaderForFollower()
 {
-    if (Player* player = ObjectAccessor::GetPlayer(*m_bot, m_uiLeaderGUID))
+    if (Unit* leader = ObjectAccessor::GetUnit(*m_bot, m_uiLeaderGUID))
     {
-        if (player->IsAlive())
+        if (leader->IsAlive())
         {
-            return player;
+            return leader;
         }
         else
         {
-            if (Group* group = player->GetGroup())
-            {
-                for (GroupReference* groupRef = group->GetFirstMember(); groupRef != nullptr; groupRef = groupRef->next())
-                {
-                    Player* member = groupRef->GetSource();
+            Player *player = leader->ToPlayer();
 
-                    if (member && m_bot->IsWithinDistInMap(member, MAX_PLAYER_DISTANCE) && member->IsAlive())
+            if (player)
+            {
+                if (Group* group = player->GetGroup())
+                {
+                    for (GroupReference* groupRef = group->GetFirstMember();
+                         groupRef != nullptr;
+                         groupRef = groupRef->next())
                     {
-                        m_uiLeaderGUID = member->GetGUID();
-                        return member;
+                        Player* member = groupRef->GetSource();
+
+                        if (member && m_bot->IsWithinDistInMap(member, MAX_PLAYER_DISTANCE) && member->IsAlive())
+                        {
+                            m_uiLeaderGUID = member->GetGUID();
+                            return member;
+                        }
                     }
                 }
             }
@@ -591,19 +671,18 @@ bool BotAI::AssistPlayerInCombat(Unit* who)
         return false;
     }
 
-    //experimental (unknown) flag not present
     if (!(m_bot->GetCreatureTemplate()->type_flags & CREATURE_TYPE_FLAG_CAN_ASSIST))
     {
         return false;
     }
 
-    //not a player
+    // not a player
     if (!who->GetVictim()->GetCharmerOrOwnerPlayerOrPlayerItself())
     {
         return false;
     }
 
-    //never attack friendly
+    // never attack friendly
     if (m_bot->IsFriendlyTo(who))
     {
         return false;
@@ -622,7 +701,7 @@ bool BotAI::AssistPlayerInCombat(Unit* who)
 
 bool BotAI::IAmFree() const
 {
-    if (m_master)
+    if (m_bot->GetOwnerGUID() == ObjectGuid::Empty)
     {
         return true;
     }
@@ -638,10 +717,17 @@ uint16 BotAI::Rand() const
 void BotAI::GenerateRand() const
 {
     int botCount = 0;
+    Unit* owner = nullptr;
+    BotsEntry *botsEntry = sBotsRegistry->GetEntry(m_bot);
 
-    if (m_master) 
+    if (botsEntry)
     {
-        botCount = BotMgr::GetPlayerBotsCount(m_master);
+        owner = const_cast<Unit *>(botsEntry->GetBotsOwner());
+    }
+
+    if (owner)
+    {
+        botCount = BotMgr::GetBotsCount(owner);
     }
 
     __rand = urand(0, IAmFree() ? 100 : 100 + (botCount - 1) * 2);
@@ -661,13 +747,130 @@ bool BotAI::IsSpellReady(uint32 basespell, uint32 diff) const
     return (spell->enabled == true || IAmFree()) && spell->spellId != 0 && spell->cooldown <= diff;
 }
 
-float BotAI::CalcSpellMaxRange(uint32 spellId, bool enemy) const
+Unit* BotAI::FindAOETarget(float dist, uint32 minTargetNum) const
 {
-    SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
+    std::list<Unit*> unitList;
+    Acore::AnyUnfriendlyUnitInObjectRangeCheck u_check(m_bot, m_bot, dist);
+    Acore::UnitListSearcher<Acore::AnyUnfriendlyUnitInObjectRangeCheck> searcher(m_bot, unitList, u_check);
+    Cell::VisitAllObjects(m_bot, searcher, dist);
 
-    float maxRange = spellInfo->GetMaxRange(!enemy);
+    if (unitList.size() < minTargetNum)
+    {
+        LOG_DEBUG("npcbots", "there are %lu unfriend unit within %.1f yards.", unitList.size(), dist);
+        return nullptr;
+    }
 
-    return maxRange;
+    Unit* unit = nullptr;
+    float mydist = dist;
+
+    for (std::list<Unit*>::const_iterator itr = unitList.begin(); itr != unitList.end(); ++itr)
+    {
+        if ((*itr)->isMoving() && (*itr)->GetVictim() &&
+            ((*itr)->GetDistance2d((*itr)->GetVictim()->GetPositionX(), (*itr)->GetVictim()->GetPositionY()) > 7.5f ||
+            !(*itr)->HasInArc(float(M_PI) * 0.75f, (*itr)->GetVictim())))
+        {
+            continue;
+        }
+
+        if (!unit && (*itr)->GetVictim() && (*itr)->GetDistance((*itr)->GetVictim()) < dist * 0.334f)
+        {
+            unit = *itr;
+            continue;
+        }
+
+        if (!unit)
+        {
+            float destDist = m_bot->GetDistance((*itr)->GetPositionX(), (*itr)->GetPositionY(), (*itr)->GetPositionZ());
+
+            if (destDist < mydist)
+            {
+                mydist = destDist;
+                unit = *itr;
+            }
+        }
+
+        if (unit)
+        {
+            uint8 count = 0;
+
+            for (std::list<Unit*>::const_iterator it = unitList.begin(); it != unitList.end(); ++it)
+            {
+                if (*it != unit && (*it)->GetDistance2d(unit->GetPositionX(), unit->GetPositionY()) < 5.f)
+                {
+                    if (++count > 2)
+                    {
+                        if (m_bot->GetDistance(*it) < me->GetDistance(unit) && unit->HasInArc(float(M_PI) / 2, m_bot))
+                        {
+                            unit = *it;
+                        }
+
+                        break;
+                    }
+                }
+            }
+
+            if (count > 2)
+            {
+                break;
+            }
+
+            unit = nullptr;
+        }
+    }
+
+    return unit;
+}
+
+//Finds target for CC spells with MECHANIC_STUN
+Unit* BotAI::FindStunTarget(float dist) const
+{
+    std::list<Unit*> unitList;
+
+    Acore::StunUnitCheck check(m_bot, dist);
+    Acore::UnitListSearcher<Acore::StunUnitCheck> searcher(m_bot, unitList, check);
+    Cell::VisitAllObjects(m_bot, searcher, dist);
+
+    if (unitList.empty())
+    {
+        return nullptr;
+    }
+
+    if (unitList.size() == 1)
+    {
+        return *unitList.begin();
+    }
+
+    return Acore::Containers::SelectRandomContainerElement(unitList);
+}
+
+//Finds casting target (neutral or enemy)
+//Can be used to get silence/interruption/reflect/grounding check
+Unit* BotAI::FindCastingTarget(float maxdist, float mindist, uint32 spellId, uint8 minHpPct) const
+{
+    std::list<Unit*> unitList;
+
+    Acore::CastingUnitCheck check(m_bot, mindist, maxdist, spellId, minHpPct);
+    Acore::UnitListSearcher<Acore::CastingUnitCheck> searcher(m_bot, unitList, check);
+    Cell::VisitAllObjects(m_bot, searcher, maxdist);
+
+    if (unitList.empty())
+    {
+        return nullptr;
+    }
+
+    if (unitList.size() == 1)
+    {
+        return *unitList.begin();
+    }
+
+    return Acore::Containers::SelectRandomContainerElement(unitList);
+}
+
+void BotAI::GetNearbyTargetsInConeList(std::list<Unit*> &targets, float maxdist) const
+{
+    Acore::NearbyHostileUnitInConeCheck check(m_bot, maxdist, this);
+    Acore::UnitListSearcher<Acore::NearbyHostileUnitInConeCheck> searcher(m_bot, targets, check);
+    Cell::VisitAllObjects(m_bot, searcher, maxdist);
 }
 
 uint32 BotAI::GetBotSpellId(uint32 basespell) const
@@ -752,6 +955,33 @@ void BotAI::OnBotSpellGo(Spell const* spell, bool ok)
     {
         if (CanBotAttackOnVehicle())
         {
+            //Set cooldown
+            if (!curInfo->IsCooldownStartedOnEvent() && !curInfo->IsPassive())
+            {
+                uint32 rec = curInfo->RecoveryTime;
+                uint32 catrec = curInfo->CategoryRecoveryTime;
+
+                if (rec > 0)
+                {
+// TODO: implement this => ApplyBotSpellCooldownMods
+//                    ApplyBotSpellCooldownMods(curInfo, rec);
+                }
+
+                if (catrec > 0 && !(curInfo->AttributesEx6 & SPELL_ATTR6_NO_CATEGORY_COOLDOWN_MODS))
+                {
+// TODO: implement this => ApplyBotSpellCategoryCooldownMods
+//                    ApplyBotSpellCategoryCooldownMods(curInfo, catrec);
+                }
+
+                SetSpellCooldown(curInfo->GetFirstRankSpell()->Id, rec);
+//                SetSpellCategoryCooldown(curInfo->GetFirstRankSpell(), catrec);
+            }
+
+            if (IsPotionSpell(curInfo->Id))
+            {
+                StartPotionTimer();
+            }
+
             OnClassSpellGo(curInfo);
         }
     }
@@ -913,3 +1143,47 @@ void BotAI::RegenerateEnergy()
         }
     }
 }
+
+bool BotAI::CCed(Unit const* target, bool root)
+{
+    return target ? target->HasUnitState(UNIT_STATE_CONFUSED | UNIT_STATE_STUNNED | UNIT_STATE_FLEEING | UNIT_STATE_DISTRACTED | UNIT_STATE_CONFUSED_MOVE | UNIT_STATE_FLEEING_MOVE) || (root && (target->HasUnitState(UNIT_STATE_ROOT) || target->isFrozen() || target->isInRoots())) : true;
+}
+
+void BotAI::DrinkPotion(bool mana)
+{
+    if (IsCasting())
+    {
+        return;
+    }
+
+    m_bot->CastSpell(me, GetPotion(mana));
+}
+
+bool BotAI::IsPotionReady() const
+{
+    return m_potionTimer <= m_lastUpdateDiff;
+}
+
+void BotAI::StartPotionTimer()
+{
+    m_potionTimer = POTION_CD;
+}
+
+uint32 BotAI::GetPotion(bool mana) const
+{
+    for (int8 i = MAX_POTION_SPELLS - 1; i >= 0; --i)
+    {
+        if (m_bot->getLevel() >= (mana ? ManaPotionSpells[i][0] : HealingPotionSpells[i][0]))
+        {
+            return (mana ? ManaPotionSpells[i][1] : HealingPotionSpells[i][1]);
+        }
+    }
+
+    return (mana ? ManaPotionSpells[0][1] : HealingPotionSpells[0][1]);
+}
+
+bool BotAI::IsPotionSpell(uint32 spellId) const
+{
+    return spellId == GetPotion(true) || spellId == GetPotion(false);
+}
+

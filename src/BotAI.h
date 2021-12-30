@@ -10,7 +10,7 @@
 #include "Player.h"
 #include "ScriptedCreature.h"
 
-#define BOT_FOLLOW_DIST  4.0f
+#define BOT_FOLLOW_DIST  3.0f
 #define BOT_FOLLOW_ANGLE (M_PI/2)
 
 enum eFollowState
@@ -20,6 +20,33 @@ enum eFollowState
     STATE_FOLLOW_RETURNING  = 0x002,    //when returning to combat start after being in combat
     STATE_FOLLOW_PAUSED     = 0x004,    //disables following
     STATE_FOLLOW_COMPLETE   = 0x008     //follow is completed and may end
+};
+
+#define MAX_POTION_SPELLS 8
+#define MAX_FEAST_SPELLS 11
+
+uint32 const ManaPotionSpells[MAX_POTION_SPELLS][2] =
+{
+    {  5,   437 },
+    { 14,   438 },
+    { 22,  2023 },
+    { 31, 11903 },
+    { 41, 17530 },
+    { 49, 17531 },
+    { 55, 28499 },
+    { 70, 43186 }
+};
+
+uint32 const HealingPotionSpells[MAX_POTION_SPELLS][2] =
+{
+    {  1,   439 },
+    {  3,   440 },
+    { 12,   441 },
+    { 21,  2024 },
+    { 35,  4042 },
+    { 45, 17534 },
+    { 55, 28495 },
+    { 70, 43185 }
 };
 
 class BotAI : public ScriptedAI
@@ -53,48 +80,58 @@ public:
 
 public:
     void OnCreatureFinishedUpdate(uint32 uiDiff);
-    void StartFollow(Player* player, uint32 factionForFollower = 0);
+    void OnBotSpellGo(Spell const* spell, bool ok = true);
+    virtual void OnClassSpellGo(SpellInfo const* /*spell*/) { }
+
+    void StartFollow(Unit* leader, uint32 factionForFollower = 0);
     void SetFollowComplete();
 
     bool HasBotState(uint32 uiBotState) { return (m_uiBotState & uiBotState); }
     bool IAmFree() const;
-
     bool IsChanneling(Unit const* u = nullptr) const { if (!u) u = me; return u->GetCurrentSpell(CURRENT_CHANNELED_SPELL); }
     bool IsCasting(Unit const* u = nullptr) const { if (!u) u = me; return (u->HasUnitState(UNIT_STATE_CASTING) || IsChanneling(u) || u->IsNonMeleeSpellCast(false, false, true, false, false)); }
     bool IsSpellReady(uint32 basespell, uint32 diff) const;
+    bool CanBotAttackOnVehicle() const;
+    bool CCed(Unit const* target, bool root = false);
+
+    uint32 GetBotSpellId(uint32 basespell) const;
+
     void SetSpellCooldown(uint32 basespell, uint32 msCooldown);
     void ReduceSpellCooldown(uint32 basespell, uint32 uiDiff);
 
-    Player* GetBotOwner() const { return m_master; }
-    void SetBotOwner(Player* newOwner) { m_master = newOwner; }
-
-    bool CanBotAttackOnVehicle() const;
-
-    void OnBotSpellGo(Spell const* spell, bool ok = true);
+    Unit* FindAOETarget(float dist, uint32 minTargetNum = 3) const;
+    Unit* FindStunTarget(float dist = 20) const;
+    Unit* FindCastingTarget(float maxdist = 10, float mindist = 0, uint32 spellId = 0, uint8 minHpPct = 0) const;
+    void GetNearbyTargetsInConeList(std::list<Unit*> &targets, float maxdist) const;
 
     virtual void SummonBotPet(Position const* /*pos*/) { }
     virtual void UnSummonBotPet() { }
-    virtual void OnClassSpellGo(SpellInfo const* /*spell*/) { }
-
-    uint16 Rand() const;
 
 public:
-    typedef std::unordered_map<uint32 /*firstrankspellid*/, BotSpell* /*spell*/> BotSpellMap;
+    uint16 Rand() const;
 
+    typedef std::unordered_map<uint32 /*firstrankspellid*/, BotSpell* /*spell*/> BotSpellMap;
     BotSpellMap const& GetSpellMap() const { return m_spells; }
-    uint32 GetBotSpellId(uint32 basespell) const;
-    float CalcSpellMaxRange(uint32 spellId, bool enemy = true) const;
 
 protected:
     virtual void UpdateBotAI(uint32 uiDiff);
-    virtual void ReduceCooldown(uint32 uiDiff) { }
+    virtual void UpdateSpellCD(uint32 uiDiff) { }
     virtual void InitCustomeSpells() { }
 
+    void UpdateCommonTimes(uint32 uiDiff);
     bool UpdateCommonBotAI(uint32 uiDiff);
-    Player* GetLeaderForFollower();
+    Unit* GetLeaderForFollower();
     void BuildGrouUpdatePacket(WorldPacket* data);
 
     void InitSpellMap(uint32 basespell, bool forceadd = false, bool forwardRank = true);
+    static uint8 GetHealthPCT(Unit const* u) { if (!u || !u->IsAlive() || u->GetMaxHealth() <= 1) return 100; return uint8(((float(u->GetHealth())) / u->GetMaxHealth()) * 100); }
+    static uint8 GetManaPCT(Unit const* u) { if (!u || !u->IsAlive() || u->GetMaxPower(POWER_MANA) <= 1) return 100; return (u->GetPower(POWER_MANA) * 10 / (1 + u->GetMaxPower(POWER_MANA) / 10)); }
+
+    void DrinkPotion(bool mana);
+    bool IsPotionReady() const;
+    uint32 GetPotion(bool mana) const;
+    void StartPotionTimer();
+    bool IsPotionSpell(uint32 spellId) const;
 
 private:
     void UpdateFollowerAI(uint32 uiDiff);
@@ -107,14 +144,17 @@ private:
     void RegenerateEnergy();
 
 protected:
-    Player* m_master;
     Creature* m_bot;
     Creature* m_pet;
+
+    // timer
+    uint32 m_lastUpdateDiff;
+    uint32 m_potionTimer;
 
 private:
     ObjectGuid m_uiLeaderGUID;
 
-    uint32 m_lastUpdateDiff;
+    // timer
     uint32 m_uiFollowerTimer;
     uint32 m_uiWaitTimer;
     uint32 m_uiUpdateTimerMedium;

@@ -10,47 +10,42 @@
 #include "Log.h"
 #include "Map.h"
 
-void BotMgr::PlayerHireBot(Player* owner, Creature* bot)
+void BotMgr::HireBot(Unit* owner, Creature* bot)
 {
     if (!bot || !owner)
     {
         return;
     }
 
-    LOG_DEBUG("npcbots", "player [%s] begin hire the bot [%s]", owner->GetName().c_str(), bot->GetName().c_str());
+    LOG_DEBUG("npcbots", "[%s] begin hire the bot [%s]", owner->GetName().c_str(), bot->GetName().c_str());
 
     bot->SetOwnerGUID(owner->GetGUID());
     bot->SetCreatorGUID(owner->GetGUID());
     bot->SetByteValue(UNIT_FIELD_BYTES_2, 1, owner->GetByteValue(UNIT_FIELD_BYTES_2, 1));
     bot->SetFaction(owner->GetFaction());
     bot->SetPhaseMask(owner->GetPhaseMask(), true);
-
     owner->m_Controlled.insert(bot);
-
     bot->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
     bot->m_ControlledByPlayer = true;
 
-    BotMgr::SetBotLevel(bot, owner->getLevel(), true);
+    BotMgr::SetBotLevel(bot, owner->getLevel(), false);
 
     LOG_DEBUG("npcbots", "begin register bot [%s]", bot->GetName().c_str());
-    sBotsRegistry->RegisterBot(bot);
+    sBotsRegistry->RegisterBot(owner, bot);
     LOG_DEBUG("npcbots", "end register bot [%s]", bot->GetName().c_str());
 
     BotAI* ai = GetBotAI(bot);
 
     if (ai)
     {
-        ai->SetBotOwner(owner);
         ai->StartFollow(owner);
     }
 
-    LOG_DEBUG("npcbots", "player [%s] end hire the bot [%s]", owner->GetName().c_str(), bot->GetName().c_str());
+    LOG_DEBUG("npcbots", "[%s] end hire the bot [%s]", owner->GetName().c_str(), bot->GetName().c_str());
 }
 
 bool BotMgr::DismissBot(Creature* bot)
 {
-    LOG_DEBUG("npcbots", "begin dismiss bot [%s]", bot->GetName().c_str());
-
     if (!bot)
     {
         LOG_DEBUG("npcbots", "end dismiss bot. invalid parameter [bot]...");
@@ -58,11 +53,18 @@ bool BotMgr::DismissBot(Creature* bot)
         return false;
     }
 
-    PlayerBotsEntry* entry = sBotsRegistry->GetEntry(bot);
+    if (bot->IsSummon())
+    {
+        return false;
+    }
+
+    LOG_DEBUG("npcbots", "begin dismiss bot [%s]", bot->GetName().c_str());
+
+    BotsEntry* entry = sBotsRegistry->GetEntry(bot);
 
     if (!entry)
     {
-        LOG_DEBUG("npcbots", "end dismiss bot. bot [%s] not found in player bots registry...", bot->GetName().c_str());
+        LOG_DEBUG("npcbots", "end dismiss bot. bot [%s] not found in bots registry...", bot->GetName().c_str());
 
         return false;
     }
@@ -73,10 +75,9 @@ bool BotMgr::DismissBot(Creature* bot)
     {
         ai->UnSummonBotPet();
         ai->SetFollowComplete();
-        ai->SetBotOwner(nullptr);
     }
 
-    Player *owner = const_cast<Player *>(entry->GetBotsOwner());
+    Unit *owner = const_cast<Unit *>(entry->GetBotsOwner());
     CleanupsBeforeBotRemove(owner, bot);
     sBotsRegistry->UnregisterBot(owner, bot);
 
@@ -88,7 +89,7 @@ bool BotMgr::DismissBot(Creature* bot)
     return true;
 }
 
-void BotMgr::CleanupsBeforeBotRemove(Player* owner, Creature* bot)
+void BotMgr::CleanupsBeforeBotRemove(Unit* owner, Creature* bot)
 {
     if (bot->GetVehicle())
     {
@@ -105,7 +106,7 @@ void BotMgr::CleanupsBeforeBotRemove(Player* owner, Creature* bot)
     owner->m_Controlled.erase(bot);
     bot->m_ControlledByPlayer = false;
 
-    SetBotLevel(bot, bot->GetCreatureTemplate()->minlevel);
+    SetBotLevel(bot, bot->GetCreatureTemplate()->minlevel, false);
 
     Map* map = bot->FindMap();
 
@@ -116,7 +117,7 @@ void BotMgr::CleanupsBeforeBotRemove(Player* owner, Creature* bot)
     }
 }
 
-BotAI* BotMgr::GetBotAI(Creature* bot)
+BotAI* BotMgr::GetBotAI(Creature const* bot)
 {
     if (!bot)
     {
@@ -133,17 +134,35 @@ BotAI* BotMgr::GetBotAI(Creature* bot)
     return ai;
 }
 
+Unit const* BotMgr::GetBotOwner(Creature* bot)
+{
+    if (!bot)
+    {
+        return nullptr;
+    }
+
+    BotsEntry* entry = sBotsRegistry->GetEntry(bot);
+
+    if (entry)
+    {
+        return entry->GetBotsOwner();
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
 void BotMgr::SetBotLevel(Creature* bot, uint8 level, bool showLevelChange)
 {
     CreatureTemplate const* cInfo = bot->GetCreatureTemplate();
-    uint32 rank = 0;
 
     bot->SetLevel(level, showLevelChange);
 
     CreatureBaseStats const* stats = sObjectMgr->GetCreatureBaseStats(level, cInfo->unit_class);
 
     // health
-    float healthmod = sWorld->getRate(RATE_CREATURE_ELITE_RAREELITE_HP);
+    float healthmod = sWorld->getRate(RATE_CREATURE_ELITE_ELITE_HP);
 
     uint32 basehp = std::max<uint32>(1, stats->GenerateHealth(cInfo));
     uint32 health = uint32(basehp * healthmod);
@@ -164,16 +183,17 @@ void BotMgr::SetBotLevel(Creature* bot, uint8 level, bool showLevelChange)
     bot->SetModifierValue(UNIT_MOD_MANA, BASE_VALUE, (float)mana);
 
     // damage
-    float basedamage = stats->GenerateBaseDamage(cInfo);
+    float baseDamage = stats->GenerateBaseDamage(cInfo);
+    float damageMod = sWorld->getRate(RATE_CREATURE_NORMAL_DAMAGE);
 
-    float weaponBaseMinDamage = basedamage;
-    float weaponBaseMaxDamage = basedamage * 1.5;
+    float weaponBaseMinDamage = baseDamage;
+    float weaponBaseMaxDamage = baseDamage * damageMod;
 
     bot->SetBaseWeaponDamage(BASE_ATTACK, MINDAMAGE, weaponBaseMinDamage);
     bot->SetBaseWeaponDamage(BASE_ATTACK, MAXDAMAGE, weaponBaseMaxDamage);
 
-    bot->SetBaseWeaponDamage(OFF_ATTACK, MINDAMAGE, weaponBaseMinDamage);
-    bot->SetBaseWeaponDamage(OFF_ATTACK, MAXDAMAGE, weaponBaseMaxDamage);
+    bot->SetBaseWeaponDamage(OFF_ATTACK, MINDAMAGE, weaponBaseMinDamage * 0.75);
+    bot->SetBaseWeaponDamage(OFF_ATTACK, MAXDAMAGE, weaponBaseMaxDamage * 0.75);
 
     bot->SetBaseWeaponDamage(RANGED_ATTACK, MINDAMAGE, weaponBaseMinDamage);
     bot->SetBaseWeaponDamage(RANGED_ATTACK, MAXDAMAGE, weaponBaseMaxDamage);
@@ -182,9 +202,9 @@ void BotMgr::SetBotLevel(Creature* bot, uint8 level, bool showLevelChange)
     bot->SetModifierValue(UNIT_MOD_ATTACK_POWER_RANGED, BASE_VALUE, stats->RangedAttackPower);
 }
 
-int BotMgr::GetPlayerBotsCount(Player* player)
+int BotMgr::GetBotsCount(Unit* owner)
 {
-    PlayerBotsEntry* entry = sBotsRegistry->GetEntry(player);
+    BotsEntry* entry = sBotsRegistry->GetEntry(owner->GetGUID());
 
     if (entry)
     {

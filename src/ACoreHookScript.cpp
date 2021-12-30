@@ -33,7 +33,7 @@ void PlayerHookScript::OnLogin(Player* player)
 
 void PlayerHookScript::OnLogout(Player* player)
 {
-    PlayerBotsEntry* entry = sBotsRegistry->GetEntry(player);
+    BotsEntry* entry = sBotsRegistry->GetEntry(player->GetGUID());
 
     if (entry)
     {
@@ -46,23 +46,6 @@ void PlayerHookScript::OnLogout(Player* player)
             BotMgr::DismissBot(const_cast<Creature*>(bot));
         }
     }
-}
-
-// Called when a player switches to a new zone
-void PlayerHookScript::OnUpdateZone(Player* player, uint32 newZone, uint32 newArea)
-{
-//    if (player)
-//    {
-//        if (strcmp(player->GetName().c_str(), "Felthas") == 0)
-//        {
-//            LOG_DEBUG("npcbots", "player [%s] switches to a new zone.", player->GetName().c_str());
-//
-//            if (player->GetDisplayId() != 27545)
-//            {
-//                player->SetDisplayId(27545);
-//            }
-//        }
-//    }
 }
 
 // Called when a player switches to a new area (more accurate than UpdateZone)
@@ -102,50 +85,12 @@ void PlayerHookScript::OnUpdateArea(Player* player, uint32 oldAreaId, uint32 new
                     zoneName.c_str(),
                     mapName.c_str());
 
-//            LOG_DEBUG("npcbots", "begin check bots state of player [%s]", player->GetName().c_str());
-//
-//            PlayerBotsEntry* playerBotsEntry = sBotsRegistry->GetEntry(player);
-//
-//            if (playerBotsEntry)
-//            {
-//                BotsMap botsMap = playerBotsEntry->GetBots();
-//
-//                for (BotsMap::iterator itr = botsMap.begin(); itr != botsMap.end(); itr++)
-//                {
-//                    Creature const* bot = itr->second;
-//
-//                    if (bot && !bot->IsInWorld())
-//                    {
-//                        LOG_DEBUG("npcbots", "|- bot [%s] is not in world.", bot->GetName().c_str());
-//                    }
-//                }
-//            }
-//
-//            LOG_DEBUG("npcbots", "end check bots state of player [%s]", player->GetName().c_str());
-
             if (player->GetDisplayId() != 27545)
             {
                 player->SetDisplayId(27545);
             }
         }
     }
-}
-
-// Called when a player changes to a new map (after moving to new map)
-void PlayerHookScript::OnMapChanged(Player* player)
-{
-//    if (player)
-//    {
-//        if (strcmp(player->GetName().c_str(), "Felthas") == 0)
-//        {
-//            LOG_DEBUG("npcbots", "player [%s] changes to a new map.", player->GetName().c_str());
-//
-//            if (player->GetDisplayId() != 27545)
-//            {
-//                player->SetDisplayId(27545);
-//            }
-//        }
-//    }
 }
 
 bool PlayerHookScript::OnBeforeTeleport(
@@ -156,7 +101,7 @@ bool PlayerHookScript::OnBeforeTeleport(
 {
     if (player)
     {
-        PlayerBotsEntry* entry = sBotsRegistry->GetEntry(player);
+        BotsEntry* entry = sBotsRegistry->GetEntry(player->GetGUID());
 
         if (entry)
         {
@@ -221,7 +166,7 @@ void PlayerHookScript::OnLevelChanged(Player* player, uint8 oldlevel)
     {
         uint8 newLevel = player->getLevel();
 
-        PlayerBotsEntry* entry = sBotsRegistry->GetEntry(player);
+        BotsEntry* entry = sBotsRegistry->GetEntry(player->GetGUID());
 
         if (entry)
         {
@@ -231,7 +176,7 @@ void PlayerHookScript::OnLevelChanged(Player* player, uint8 oldlevel)
             {
                 Creature const* bot = itr->second;
 
-                BotMgr::SetBotLevel(const_cast<Creature*>(bot), newLevel);
+                BotMgr::SetBotLevel(const_cast<Creature*>(bot), newLevel, false);
             }
         }
     }
@@ -260,7 +205,27 @@ void SpellHookScript::OnSpellGo(Unit const* caster, Spell const* spell, bool ok)
         return;
     }
 
-    if (caster->GetTypeId() == TYPEID_UNIT)
+    if (caster->GetTypeId() == TYPEID_PLAYER)
+    {
+        Player const* player = caster->ToPlayer();
+
+        if (player)
+        {
+            if (strcmp(player->GetName().c_str(), "Felthas") == 0)
+            {
+                SpellEntry const* spellEntry = sSpellStore.LookupEntry(spell->GetSpellInfo()->Id);
+
+                LOG_DEBUG(
+                    "npcbots",
+                    "[%s] cast spell [%u: %s] %s...",
+                    player->GetName().c_str(),
+                    spellEntry->Id,
+                    spellEntry ? spellEntry->SpellName[sWorld->GetDefaultDbcLocale()] : "unkown",
+                    ok ? "ok" : "failed");
+            }
+        }
+    }
+    else if (caster->GetTypeId() == TYPEID_UNIT)
     {
         Creature const* creature = caster->ToCreature();
 
@@ -268,12 +233,13 @@ void SpellHookScript::OnSpellGo(Unit const* caster, Spell const* spell, bool ok)
         {
             if (creature->GetEntry() >= 9000000)
             {
-                SpellEntry const * spellEntry = sSpellStore.LookupEntry(spell->GetSpellInfo()->Id);
+                SpellEntry const* spellEntry = sSpellStore.LookupEntry(spell->GetSpellInfo()->Id);
 
                 LOG_DEBUG(
                     "npcbots",
-                    "[%s] cast spell [%s] %s...",
+                    "[%s] cast spell [id: %u %s] %s...",
                     creature->GetName().c_str(),
+                    spellEntry->Id,
                     spellEntry ? spellEntry->SpellName[sWorld->GetDefaultDbcLocale()] : "unkown",
                     ok ? "ok" : "failed");
 

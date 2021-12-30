@@ -10,7 +10,7 @@
 #include "BotAI.h"
 #include "Creature.h"
 #include "Map.h"
-#include "Player.h"
+#include "Unit.h"
 
 enum BotRegisterResult
 {
@@ -22,11 +22,11 @@ enum BotRegisterResult
 };
 
 typedef std::map<ObjectGuid, Creature const*> BotsMap;
-class PlayerBotsRegistry;
+class BotsRegistry;
 
-class PlayerBotsEntry
+class BotsEntry
 {
-    friend class PlayerBotsRegistry;
+    friend class BotsRegistry;
 
 public:
     BotsMap GetBots() const
@@ -34,72 +34,58 @@ public:
         return m_bots;
     }
 
-    Player const* GetBotsOwner()
+    Unit const* GetBotsOwner()
     {
         return m_owner;
     }
 
 protected:
-    explicit PlayerBotsEntry(Player const* player) : m_owner(player) { }
+    explicit BotsEntry(Unit const* owner) : m_owner(owner) { }
 
 protected:
     void AddBot(Creature const* bot) { m_bots[bot->GetGUID()] = bot; }
     void RemoveBot(Creature const* bot) { m_bots.erase(bot->GetGUID()); }
 
 private:
-    Player const*   m_owner;
+    Unit const*     m_owner;
     BotsMap         m_bots;
 };
 
-class PlayerBotsRegistry
+class BotsRegistry
 {
 protected:
-    explicit PlayerBotsRegistry() { }
+    explicit BotsRegistry() { }
 
 public:
-    static PlayerBotsRegistry* instance()
+    static BotsRegistry* instance()
     {
-        static PlayerBotsRegistry instance;
+        static BotsRegistry instance;
         return &instance; 
     }
 
-    PlayerBotsEntry* GetEntry(Player const* player)
+    BotsEntry* GetEntry(ObjectGuid ownerGuid)
     {
-        if (!player)
-        {
-            LOG_ERROR(
-                "npcbots",
-                "invalid parameter [bot] of function PlayerBotsEntry::GetEntry(Player const*)");
-
-            return nullptr;
-        }
-
-        return m_registry[player->GetGUID()];
+        return m_registry[ownerGuid];
     }
 
-    PlayerBotsEntry* GetEntry(Creature const* bot)
+    BotsEntry* GetEntry(Creature const* bot)
     {
         if (!bot)
         {
-            LOG_ERROR(
-                "npcbots",
-                "invalid parameter [bot] of function PlayerBotsEntry::GetEntry(Creature const*)");
-
             return nullptr;
         }
 
         if (bot->GetOwnerGUID() == ObjectGuid::Empty)
         {
-            LOG_ERROR("npcbots", "bot [%s] has no owner.", bot->GetName().c_str());
             return nullptr;
         }
 
-        PlayerBotsEntry* entry = m_registry[bot->GetOwnerGUID()];
+        BotsEntry* entry = m_registry[bot->GetOwnerGUID()];
 
         return entry;
     }
 
-    BotRegisterResult RegisterBot(Creature const* bot)
+    BotRegisterResult RegisterBot(Unit const* owner, Creature const* bot)
     {
         if (bot->GetOwnerGUID() == ObjectGuid::Empty)
         {
@@ -107,16 +93,14 @@ public:
             return BOT_HAS_NO_OWNER;
         }
 
-        PlayerBotsEntry* entry = GetEntry(bot);
+        BotsEntry* entry = GetEntry(bot);
 
         if (!entry)
         {
-            Player* player = ObjectAccessor::FindPlayer(bot->GetOwnerGUID());
+            LOG_DEBUG("npcbots", "owner [%s] not exist in bot registry. add one...", owner->GetName().c_str());
 
-            LOG_DEBUG("npcbots", "player [%s] not exist in bot registry. add one...", player->GetName().c_str());
-
-            entry = new PlayerBotsEntry(player);
-            m_registry[player->GetGUID()] = entry;
+            entry = new BotsEntry(owner);
+            m_registry[owner->GetGUID()] = entry;
 
             LOG_DEBUG("npcbots", "add entry to bot registry...ok!");
         }
@@ -130,15 +114,15 @@ public:
         } 
         else 
         {
-            LOG_DEBUG("npcbots", "start add bot [%s] to player...", bot->GetName().c_str());
+            LOG_DEBUG("npcbots", "start add bot [%s] to owner [%s]...", bot->GetName().c_str(), owner->GetName().c_str());
             entry->AddBot(bot);
-            LOG_DEBUG("npcbots", "end add bot [%s] to player...", bot->GetName().c_str());
+            LOG_DEBUG("npcbots", "end add bot [%s] to owner [%s]...", bot->GetName().c_str(), owner->GetName().c_str());
 
             return BOT_REGISTER_SUCCESS;
         }
     }
 
-    BotRegisterResult UnregisterBot(Player const* owner, Creature const* bot)
+    BotRegisterResult UnregisterBot(Unit const* owner, Creature const* bot)
     {
         LOG_DEBUG("npcbots", "begin unregister bot [%s]", bot->GetName().c_str());
 
@@ -149,15 +133,15 @@ public:
             return BOT_HAS_NO_OWNER;
         }
 
-        PlayerBotsEntry* entry = GetEntry(owner);
+        BotsEntry* entry = GetEntry(owner->GetGUID());
 
-        LOG_DEBUG("npcbots", "start remove bot from player [%s]...", owner->GetName().c_str());
+        LOG_DEBUG("npcbots", "start remove bot from owner [%s]...", owner->GetName().c_str());
         entry->RemoveBot(bot);
-        LOG_DEBUG("npcbots", "end remove bot from player [%s]...", owner->GetName().c_str());
+        LOG_DEBUG("npcbots", "end remove bot from owner [%s]...", owner->GetName().c_str());
 
         if (entry->GetBots().empty())
         {
-            LOG_DEBUG("npcbots", "player has no bots. so delete player bots entry from player bots registry too.");
+            LOG_DEBUG("npcbots", "owner has no bots. delete entry from bots registry too.");
             m_registry.erase(owner->GetGUID());
             delete entry;
         }
@@ -168,10 +152,10 @@ public:
     }
 
 private:
-    std::map<ObjectGuid, PlayerBotsEntry*> m_registry;
+    std::map<ObjectGuid, BotsEntry*> m_registry;
 };
 
-#define sBotsRegistry PlayerBotsRegistry::instance()
+#define sBotsRegistry BotsRegistry::instance()
 
 class BotMgr
 {
@@ -179,19 +163,19 @@ protected:
     BotMgr() { }
 
 public:
-    static void PlayerHireBot(Player* /*owner*/, Creature* /*bot*/);
+    static void HireBot(Unit* /*owner*/, Creature* /*bot*/);
     static bool DismissBot(Creature* /*bot*/);
 
-    static BotAI* GetBotAI(Creature* /*bot*/);
+    static BotAI* GetBotAI(Creature const* /*bot*/);
+    static Unit const* GetBotOwner(Creature* /*bot*/);
     static void SetBotLevel(Creature* /*bot*/, uint8 /*level*/, bool showLevelChange = true);
-
-    static int GetPlayerBotsCount(Player* player);
+    static int GetBotsCount(Unit* owner);
 
     //onEvent hooks
     static void OnBotSpellGo(Unit const* caster, Spell const* spell, bool ok = true);
 
 private:
-    static void CleanupsBeforeBotRemove(Player* /*owner*/, Creature* /*bot*/);
+    static void CleanupsBeforeBotRemove(Unit* /*owner*/, Creature* /*bot*/);
 };
 
 #endif //_BOT_MGR_H 

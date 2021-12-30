@@ -18,10 +18,12 @@ enum BotCommonValues
     SPELL_INFERNO_EFFECT                = 22703,    // stun, damage (warlock spell)
 
 // CUSTOM SPELLS - UNUSED IN CODE AND DB
+    SPELL_TRIGGERED_HEAL                = 25155,    // hidden,
     SPELL_ATTACK_MELEE_1H               = 42880,
 
 // COMMON CDs
-    REGEN_CD                            = 1000,     //update hp/mana every X milliseconds
+    POTION_CD                           = 60000,    //default 60sec potion cd
+    REGEN_CD                            = 1000,     // update hp/mana every X milliseconds
 };
 
 enum BotPetTypes
