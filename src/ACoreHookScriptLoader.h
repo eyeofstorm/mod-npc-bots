@@ -26,6 +26,7 @@ void AddNpcbotsScripts()
     new CreatureHookScript();
     new SpellHookScript();
     new BotCommandsScript();
+    new MovementHandlerHookScript();
 
     /////////////////////
     // bot ai here.

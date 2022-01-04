@@ -242,7 +242,7 @@ namespace Acore
                 if (u == me)
                     return false;
 
-                if (!u->IsInCombat())
+                if (!free && !u->IsInCombat())
                     return false;
 
                 if (!u->InSamePhase(me))
@@ -251,8 +251,8 @@ namespace Acore
                 if (u->HasUnitState(UNIT_STATE_CONFUSED | UNIT_STATE_STUNNED | UNIT_STATE_FLEEING | UNIT_STATE_DISTRACTED | UNIT_STATE_CONFUSED_MOVE))
                     return false;
 
-                if (!ai->IAmFree() && u->IsControlledByPlayer())
-                    return false;
+//                if (!free && u->IsControlledByPlayer())
+//                    return false;
 
                 if (!me->IsWithinDistInMap(u, max_range))
                     return false;
@@ -262,8 +262,8 @@ namespace Acore
 
                 if (free)
                 {
-                    if (u->IsControlledByPlayer())
-                        return false;
+//                    if (u->IsControlledByPlayer())
+//                        return false;
 
                     if (!me->IsValidAttackTarget(u) || !u->isTargetableForAttack(false))
                         return false;

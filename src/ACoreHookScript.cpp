@@ -17,8 +17,35 @@
 /////////////////////////////////
 // Azeroth core hook scripts here
 /////////////////////////////////
-void UnitHookScript::OnAuraRemove(Unit* unit, AuraApplication* aurApp, AuraRemoveMode mode)
+
+bool UnitHookScript::OnBeforePlayerTeleport(
+                            Player* player,
+                            uint32 mapid, float x, float y, float z, float orientation,
+                            uint32 options,
+                            Unit* target)
 {
+    if (BotMgr::GetBotsCount(player) > 0)
+    {
+        BotEntryMap botsMap = sBotsRegistry->GetEntryByOwnerGUID(player->GetGUID());
+
+        if (!botsMap.empty())
+        {
+            for (BotEntryMap::iterator itr = botsMap.begin(); itr != botsMap.end(); ++itr)
+            {
+                BotEntry* entry = itr->second;
+
+                if (entry)
+                {
+                    if (BotAI* ai = entry->GetBotAI())
+                    {
+                        ai->OnBeforeOwnerTeleport(mapid, x, y, z, orientation, options, target);
+                    }
+                }
+            }
+        }
+    }
+
+    return true;
 }
 
 void PlayerHookScript::OnLogin(Player* player)
@@ -33,17 +60,18 @@ void PlayerHookScript::OnLogin(Player* player)
 
 void PlayerHookScript::OnLogout(Player* player)
 {
-    BotsEntry* entry = sBotsRegistry->GetEntry(player->GetGUID());
+    BotEntryMap botsMap = sBotsRegistry->GetEntryByOwnerGUID(player->GetGUID());
 
-    if (entry)
+    if (!botsMap.empty())
     {
-        BotsMap botsMap = entry->GetBots();
-
-        for (BotsMap::iterator itr = botsMap.begin(); itr != botsMap.end(); itr++)
+        for (BotEntryMap::iterator itr = botsMap.begin(); itr != botsMap.end(); ++itr)
         {
-            Creature const* bot = itr->second;
+            BotEntry* entry = itr->second;
 
-            BotMgr::DismissBot(const_cast<Creature*>(bot));
+            if (entry)
+            {
+                BotMgr::DismissBot(entry->GetBot());
+            }
         }
     }
 }
@@ -51,103 +79,38 @@ void PlayerHookScript::OnLogout(Player* player)
 // Called when a player switches to a new area (more accurate than UpdateZone)
 void PlayerHookScript::OnUpdateArea(Player* player, uint32 oldAreaId, uint32 newAreaId)
 {
+//    std::string mapName = player->FindMap() ? player->FindMap()->GetMapName() : "unknown map";
+//    std::string zoneName = "unknown";
+//    std::string oldAreaName = "unknown";
+//    std::string newAreaName = "unknown";
+//    LocaleConstant locale = sWorld->GetDefaultDbcLocale();
+//
+//    if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(player->GetZoneId()))
+//    {
+//        zoneName = zone->area_name[locale];
+//    }
+//
+//    if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(oldAreaId))
+//    {
+//        oldAreaName = area->area_name[locale];
+//    }
+//
+//    if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(newAreaId))
+//    {
+//        newAreaName = area->area_name[locale];
+//    }
+//
+//    LOG_DEBUG(
+//            "npcbots",
+//            "player [%s] switches from [%s] to [%s, %s, %s].",
+//            player->GetName().c_str(),
+//            oldAreaName.c_str(),
+//            newAreaName.c_str(),
+//            zoneName.c_str(),
+//            mapName.c_str());
+
     if (player)
     {
-        if (strcmp(player->GetName().c_str(), "Felthas") == 0)
-        {
-            std::string mapName = player->FindMap() ? player->FindMap()->GetMapName() : "unknown map";
-            std::string zoneName = "unknown zone";
-            std::string oldAreaName = "unknown area";
-            std::string newAreaName = "unknown area";
-            LocaleConstant locale = sWorld->GetDefaultDbcLocale();
-
-            if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(player->GetZoneId()))
-            {
-                zoneName = zone->area_name[locale];
-            }
-
-            if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(oldAreaId))
-            {
-                oldAreaName = area->area_name[locale];
-            }
-
-            if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(newAreaId))
-            {
-                newAreaName = area->area_name[locale];
-            }
-
-            LOG_DEBUG(
-                    "npcbots",
-                    "player [%s] switches from [%s] to [%s, %s, %s].",
-                    player->GetName().c_str(),
-                    oldAreaName.c_str(),
-                    newAreaName.c_str(),
-                    zoneName.c_str(),
-                    mapName.c_str());
-
-            if (player->GetDisplayId() != 27545)
-            {
-                player->SetDisplayId(27545);
-            }
-        }
-    }
-}
-
-bool PlayerHookScript::OnBeforeTeleport(
-                            Player* player,
-                            uint32 mapid,
-                            float x, float y, float z, float orientation,
-                            uint32 options, Unit* target)
-{
-    if (player)
-    {
-        BotsEntry* entry = sBotsRegistry->GetEntry(player->GetGUID());
-
-        if (entry)
-        {
-            BotsMap botsMap = entry->GetBots();
-
-            for (BotsMap::iterator itr = botsMap.begin(); itr != botsMap.end(); itr++)
-            {
-                Creature const* bot = itr->second;
-
-                BotMgr::DismissBot(const_cast<Creature*>(bot));
-            }
-        }
-
-        uint32 areaId, zoneId;
-        std::string mapName = "unknown map";
-        std::string zoneName = "unknown zone";
-        std::string areaName = "unknown area";
-        LocaleConstant locale = sWorld->GetDefaultDbcLocale();
-
-        Map* map = sMapMgr->FindBaseMap(mapid);
-
-        if (map)
-        {
-            mapName = map->GetMapName();
-
-            map->GetZoneAndAreaId(player->GetPhaseMask(), zoneId, areaId, x, y, z);
-
-            if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId))
-            {
-                areaName = area->area_name[locale];
-            }
-
-            if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(zoneId))
-            {
-                zoneName = zone->area_name[locale];
-            }
-        }
-
-        LOG_DEBUG(
-                "npcbots",
-                "player [%s] before teleport to [%s, %s, %s].",
-                player->GetName().c_str(),
-                areaName.c_str(),
-                zoneName.c_str(),
-                mapName.c_str());
-
         if (strcmp(player->GetName().c_str(), "Felthas") == 0)
         {
             if (player->GetDisplayId() != 27545)
@@ -156,8 +119,6 @@ bool PlayerHookScript::OnBeforeTeleport(
             }
         }
     }
-
-    return true;
 }
 
 void PlayerHookScript::OnLevelChanged(Player* player, uint8 oldlevel)
@@ -166,17 +127,21 @@ void PlayerHookScript::OnLevelChanged(Player* player, uint8 oldlevel)
     {
         uint8 newLevel = player->getLevel();
 
-        BotsEntry* entry = sBotsRegistry->GetEntry(player->GetGUID());
+        BotEntryMap botsMap = sBotsRegistry->GetEntryByOwnerGUID(player->GetGUID());
 
-        if (entry)
+        if (!botsMap.empty())
         {
-            BotsMap botsMap = entry->GetBots();
-
-            for (BotsMap::iterator itr = botsMap.begin(); itr != botsMap.end(); itr++)
+            for (BotEntryMap::iterator itr = botsMap.begin(); itr != botsMap.end(); ++itr)
             {
-                Creature const* bot = itr->second;
+                BotEntry* entry = itr->second;
 
-                BotMgr::SetBotLevel(const_cast<Creature*>(bot), newLevel, false);
+                if (entry)
+                {
+                    if (Creature* bot = entry->GetBot())
+                    {
+                        BotMgr::SetBotLevel(bot, newLevel, false);
+                    }
+                }
             }
         }
     }
@@ -188,7 +153,7 @@ void CreatureHookScript::OnAllCreatureUpdate(Creature* creature, uint32 diff)
     {
         if (creature->GetEntry() >= 9000000) 
         {
-            BotAI* ai = BotMgr::GetBotAI(creature);
+            BotAI* ai = const_cast<BotAI*>(BotMgr::GetBotAI(creature));
 
             if (ai)
             {
@@ -217,7 +182,7 @@ void SpellHookScript::OnSpellGo(Unit const* caster, Spell const* spell, bool ok)
 
                 LOG_DEBUG(
                     "npcbots",
-                    "[%s] cast spell [%u: %s] %s...",
+                    "bot [%s] cast spell [%u: %s] %s...",
                     player->GetName().c_str(),
                     spellEntry->Id,
                     spellEntry ? spellEntry->SpellName[sWorld->GetDefaultDbcLocale()] : "unkown",
@@ -237,7 +202,7 @@ void SpellHookScript::OnSpellGo(Unit const* caster, Spell const* spell, bool ok)
 
                 LOG_DEBUG(
                     "npcbots",
-                    "[%s] cast spell [id: %u %s] %s...",
+                    "bot [%s] cast spell [id: %u %s] %s...",
                     creature->GetName().c_str(),
                     spellEntry->Id,
                     spellEntry ? spellEntry->SpellName[sWorld->GetDefaultDbcLocale()] : "unkown",
@@ -246,5 +211,52 @@ void SpellHookScript::OnSpellGo(Unit const* caster, Spell const* spell, bool ok)
                 BotMgr::OnBotSpellGo(creature, spell, ok);
             }
         }
+    }
+}
+
+void MovementHandlerHookScript::OnPlayerMoveWorldport(Player* player)
+{
+    if (player)
+    {
+        std::string mapName = "unknown";
+        std::string zoneName = "unknown";
+        std::string areaName = "unknown";
+        LocaleConstant locale = sWorld->GetDefaultDbcLocale();
+
+        Map* map = player->GetMap();
+
+        if (map)
+        {
+            mapName = map->GetMapName();
+
+            uint32 areaId, zoneId;
+            map->GetZoneAndAreaId(
+                      player->GetPhaseMask(),
+                      zoneId,
+                      areaId,
+                      player->GetPositionX(),
+                      player->GetPositionY(),
+                      player->GetPositionZ());
+
+            if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId))
+            {
+                areaName = area->area_name[locale];
+            }
+
+            if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(zoneId))
+            {
+                zoneName = zone->area_name[locale];
+            }
+        }
+
+        LOG_DEBUG(
+                "npcbots",
+                "☆☆☆ on player [%s] worldported to [%s, %s, %s].",
+                player->GetName().c_str(),
+                areaName.c_str(),
+                zoneName.c_str(),
+                mapName.c_str());
+
+        BotMgr::OnPlayerMoveWorldport(player);
     }
 }

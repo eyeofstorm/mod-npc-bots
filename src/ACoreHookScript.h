@@ -22,7 +22,7 @@ public:
     UnitHookScript() : UnitScript("npc_bots_unit_hook") { }
 
 public:
-    void OnAuraRemove(Unit* /*unit*/, AuraApplication* /*aurApp*/, AuraRemoveMode /*mode*/) override;
+    bool OnBeforePlayerTeleport(Player* player, uint32 mapid, float x, float y, float z, float orientation, uint32 options, Unit* target);
 };
 
 class PlayerHookScript : public PlayerScript
@@ -36,9 +36,6 @@ public:
     // Called when a player switches to a new area (more accurate than UpdateZone)
     void OnUpdateArea(Player* /*player*/, uint32 /*oldArea*/, uint32 /*newArea*/) override;
 
-    // Called before a player is being teleported to new coords
-    bool OnBeforeTeleport(Player* /*player*/, uint32 /*mapid*/, float /*x*/, float /*y*/, float /*z*/, float /*orientation*/, uint32 /*options*/, Unit* /*target*/) override;
-
     // Called when a player changes to a new level.
     void OnLevelChanged(Player* /*player*/, uint8 /*oldlevel*/) override;
 };
@@ -48,6 +45,7 @@ class CreatureHookScript : public AllCreatureScript
 public:
     CreatureHookScript() : AllCreatureScript("npc_bots_creature_hook") { }
 
+public:
     void OnAllCreatureUpdate(Creature* /*creature*/, uint32 /*diff*/) override;
 };
 
@@ -58,6 +56,15 @@ public:
     
 public:
     void OnSpellGo(Unit const* /*caster*/, Spell const* /*spell*/, bool /*ok*/) override;
+};
+
+class MovementHandlerHookScript : public MovementHandlerScript
+{
+public:
+    MovementHandlerHookScript() : MovementHandlerScript("npc_bots_movement_handler_hook") { }
+
+public:
+    void OnPlayerMoveWorldport(Player* /*player*/) override;
 };
 
 class BotCommandsScript : public CommandScript
@@ -71,7 +78,8 @@ public:
         {
             { "spawn",   HandleBotSpawnCommand,     SEC_MODERATOR, Console::Yes },
             { "hire",    HandleBotHireCommand,      SEC_MODERATOR, Console::Yes },
-            { "dismiss", HandleBotDismissCommand,   SEC_MODERATOR, Console::Yes }
+            { "dismiss", HandleBotDismissCommand,   SEC_MODERATOR, Console::Yes },
+            { "move",    HandleBotMoveCommand,      SEC_MODERATOR, Console::Yes }
         };
 
         static ChatCommandTable commandTable =
@@ -275,6 +283,106 @@ public:
 
             return false;
         }
+    }
+
+    // move bot to player position
+    static bool HandleBotMoveCommand(ChatHandler* handler, uint32 creatureTemplateEntry)
+    {
+        WorldSession* session = handler->GetSession();
+        Player* player = session->GetPlayer();
+
+        const CreatureTemplate* creatureTemplate = sObjectMgr->GetCreatureTemplate(creatureTemplateEntry);
+
+        if (!creatureTemplate)
+        {
+            handler->PSendSysMessage("entry %u is not defined in creature_template table!", creatureTemplateEntry);
+            handler->SetSentErrorMessage(true);
+
+            return false;
+        }
+
+        // check if this is a hireable bot.
+        if (creatureTemplate->Entry < 9000000)
+        {
+            handler->PSendSysMessage("creature(entry: %u) is not a bot!", creatureTemplateEntry);
+            handler->SetSentErrorMessage(true);
+
+            return false;
+        }
+
+        Creature *bot = sBotsRegistry->FindFirstBot(creatureTemplateEntry);
+
+        if (!bot)
+        {
+            handler->PSendSysMessage("bot(entry: %u) is not spawned!", creatureTemplateEntry);
+            handler->SetSentErrorMessage(true);
+
+            return false;
+        }
+
+        uint32 lowguid = bot->GetSpawnId();
+        CreatureData const* data = sObjectMgr->GetCreatureData(lowguid);
+
+        if (!data)
+        {
+            handler->PSendSysMessage(LANG_COMMAND_CREATGUIDNOTFOUND, lowguid);
+            handler->SetSentErrorMessage(true);
+
+            return false;
+        }
+
+        CreatureData* cdata = const_cast<CreatureData*>(data);
+
+        Position spawnPoint = player->GetPosition();
+        spawnPoint.GetPosition(cdata->posX, cdata->posY, cdata->posZ, cdata->orientation);
+        cdata->mapid = player->GetMapId();
+
+        WorldDatabase.PExecute(
+            "UPDATE creature SET position_x = %.3f, position_y = %.3f, position_z = %.3f, orientation = %.3f, map = %u WHERE guid = %u",
+            cdata->posX, cdata->posY, cdata->posZ, cdata->orientation, uint32(cdata->mapid), lowguid);
+
+        if (BotMgr::GetBotAI(bot)->IAmFree() && bot->IsInWorld() && !bot->IsInCombat() && bot->IsAlive())
+        {
+            BotMgr::TeleportBot(
+                        const_cast<Creature*>(bot),
+                        player->GetMap(),
+                        spawnPoint.m_positionX,
+                        spawnPoint.m_positionY,
+                        spawnPoint.m_positionZ,
+                        spawnPoint.m_orientation);
+
+            LOG_DEBUG(
+                  "npcbots",
+                  "bot [%s] was moved to player [%s].",
+                  bot->GetName().c_str(),
+                  player->GetName().c_str());
+
+            handler->PSendSysMessage(
+                         "bot [%s] was moved to player [%s].",
+                         bot->GetName().c_str(),
+                         player->GetName().c_str());
+
+            return true;
+        }
+
+        LOG_DEBUG(
+              "npcbots",
+              "bot [%s] cannot moved to player [%s]. IAmFree: %s, IsInWorld: %s, IsInCombat %s, IsAlive: %s",
+              bot->GetName().c_str(),
+              player->GetName().c_str(),
+              BotMgr::GetBotAI(bot)->IAmFree() ? "true" : "false",
+              bot->IsInWorld() ? "true" : "false",
+              bot->IsInCombat() ? "true" : "false",
+              bot->IsAlive() ? "true" : "false");
+
+        handler->PSendSysMessage(
+                     "bot [%s] cannot moved to player [%s].",
+                     bot->GetName().c_str(),
+                     player->GetName().c_str());
+
+        handler->SetSentErrorMessage(true);
+
+        return false;
     }
 };
 #endif

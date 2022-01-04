@@ -70,6 +70,14 @@ private:
     };
 
 public:
+    Unit* GetBotOwner() const { return m_owner; }
+    void SetBotOwner(Unit *owner) { m_owner = owner; }
+    Creature* GetBot() const { return m_bot; }
+    Creature* GetPet() const { return m_pet; }
+    ObjectGuid GetLeaderGuid() const { return m_uiLeaderGUID; }
+    uint32 GetBotSpellId(uint32 basespell) const;
+
+public:
     void MovementInform(uint32 motionType, uint32 pointId) override;
     void AttackStart(Unit*) override;
     void MoveInLineOfSight(Unit*) override;
@@ -80,11 +88,18 @@ public:
 
 public:
     void OnCreatureFinishedUpdate(uint32 uiDiff);
+    void OnBotOwnerMoveWorldport(Player* owner);
     void OnBotSpellGo(Spell const* spell, bool ok = true);
     virtual void OnClassSpellGo(SpellInfo const* /*spell*/) { }
 
     void StartFollow(Unit* leader, uint32 factionForFollower = 0);
     void SetFollowComplete();
+    bool FinishTeleport();
+    void TeleportHome();
+    void GetHomePosition(uint16& mapid, Position* pos) const;
+    bool OnBeforeOwnerTeleport(uint32 mapid, float x, float y, float z, float orientation, uint32 options, Unit* target);
+    void BotStopMovement();
+    Unit* GetLeaderForFollower();
 
     bool HasBotState(uint32 uiBotState) { return (m_uiBotState & uiBotState); }
     bool IAmFree() const;
@@ -93,8 +108,7 @@ public:
     bool IsSpellReady(uint32 basespell, uint32 diff) const;
     bool CanBotAttackOnVehicle() const;
     bool CCed(Unit const* target, bool root = false);
-
-    uint32 GetBotSpellId(uint32 basespell) const;
+    virtual bool IsPetAI() = 0;
 
     void SetSpellCooldown(uint32 basespell, uint32 msCooldown);
     void ReduceSpellCooldown(uint32 basespell, uint32 uiDiff);
@@ -107,6 +121,10 @@ public:
     virtual void SummonBotPet(Position const* /*pos*/) { }
     virtual void UnSummonBotPet() { }
 
+    // events process
+    EventProcessor* GetEvents() { return &Events; }
+    void KillEvents(bool force);
+
 public:
     uint16 Rand() const;
 
@@ -118,9 +136,8 @@ protected:
     virtual void UpdateSpellCD(uint32 uiDiff) { }
     virtual void InitCustomeSpells() { }
 
-    void UpdateCommonTimes(uint32 uiDiff);
+    void UpdateCommonTimers(uint32 uiDiff);
     bool UpdateCommonBotAI(uint32 uiDiff);
-    Unit* GetLeaderForFollower();
     void BuildGrouUpdatePacket(WorldPacket* data);
 
     void InitSpellMap(uint32 basespell, bool forceadd = false, bool forwardRank = true);
@@ -133,27 +150,31 @@ protected:
     void StartPotionTimer();
     bool IsPotionSpell(uint32 spellId) const;
 
+    bool AssistPlayerInCombat(Unit* who);
+
 private:
     void UpdateFollowerAI(uint32 uiDiff);
     void AddBotState(uint32 uiBotState) { m_uiBotState |= uiBotState; }
     void RemoveBotState(uint32 uiBotState) { m_uiBotState &= ~uiBotState; }
-    bool AssistPlayerInCombat(Unit* who);
     bool DelayUpdateIfNeeded();
     void GenerateRand() const;
     void Regenerate();
     void RegenerateEnergy();
 
 protected:
+    Unit* m_owner;
     Creature* m_bot;
     Creature* m_pet;
+    ObjectGuid m_uiLeaderGUID;
+
+    // events process
+    EventProcessor Events;
 
     // timer
     uint32 m_lastUpdateDiff;
     uint32 m_potionTimer;
 
 private:
-    ObjectGuid m_uiLeaderGUID;
-
     // timer
     uint32 m_uiFollowerTimer;
     uint32 m_uiWaitTimer;

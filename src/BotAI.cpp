@@ -6,6 +6,7 @@
 
 #include "BotAI.h"
 #include "BotCommon.h"
+#include "BotEvents.h"
 #include "BotGridNotifiers.h"
 #include "BotMgr.h"
 #include "CellImpl.h"
@@ -13,6 +14,7 @@
 #include "GridNotifiersImpl.h"
 #include "Group.h"
 #include "Log.h"
+#include "MapMgr.h"
 #include "SpellAuraEffects.h"
 #include "Vehicle.h"
 #include "Unit.h"
@@ -36,8 +38,11 @@ BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
 
     m_uiBotState = STATE_FOLLOW_NONE;
 
+    m_owner = nullptr;
     m_bot = creature;
     m_pet = nullptr;
+
+    sBotsRegistry->RegisterOrUpdate(this);
 }
 
 BotAI::~BotAI()
@@ -48,6 +53,8 @@ BotAI::~BotAI()
         delete itr->second;
         m_spells.erase(itr);
     }
+
+    sBotsRegistry->Unregister(this);
 }
 
 void BotAI::MovementInform(uint32 motionType, uint32 pointId)
@@ -113,10 +120,13 @@ void BotAI::MoveInLineOfSight(Unit* who)
     {
         if (AssistPlayerInCombat(who))
         {
+            Player* player = who->GetVictim()->GetCharmerOrOwnerPlayerOrPlayerItself();
+
             LOG_DEBUG(
                 "npcbots",
-                "bot[%s] start assist player attack creature [%s].",
+                "bot [%s] start assist player [%s] attack creature [%s] in LOS.",
                 m_bot->GetName().c_str(),
+                player ? player->GetName().c_str() : "unknown",
                 who->GetName().c_str());
 
             return;
@@ -132,7 +142,12 @@ void BotAI::MoveInLineOfSight(Unit* who)
         }
 
         AttackStart(who);
-        LOG_DEBUG("npcbots", "bot[%s] start attack creature [%s].", m_bot->GetName().c_str(), who->GetName().c_str());
+
+        LOG_DEBUG(
+              "npcbots",
+              "bot [%s] start attack creature [%s] in LOS.",
+              m_bot->GetName().c_str(),
+              who->GetName().c_str());
 
         return;
     }
@@ -179,14 +194,9 @@ void BotAI::JustDied(Unit* pKiller)
 
     if (!IAmFree())
     {
-        BotsEntry *botsEntry = sBotsRegistry->GetEntry(m_bot);
-
-        if (botsEntry)
+        if (Unit* owner = GetBotOwner())
         {
-            Unit* owner = const_cast<Unit *>(botsEntry->GetBotsOwner());
-            Player* player = owner->ToPlayer();
-
-            if (player)
+            if (Player* player = owner->ToPlayer())
             {
                 if (Group* grp = player->GetGroup())
                 {
@@ -199,7 +209,7 @@ void BotAI::JustDied(Unit* pKiller)
         }
     }
 
-    BotMgr::DismissBot(m_bot);
+    m_bot->DespawnOrUnsummon();
 }
 
 void BotAI::JustRespawned()
@@ -234,10 +244,9 @@ void BotAI::OnCreatureFinishedUpdate(uint32 uiDiff)
 
 bool BotAI::UpdateCommonBotAI(uint32 uiDiff)
 {
-    UpdateSpellCD(uiDiff);
-    UpdateCommonTimes(uiDiff);
-
     m_lastUpdateDiff = uiDiff;
+
+    UpdateCommonTimers(uiDiff);
 
     UpdateFollowerAI(uiDiff);
 
@@ -247,14 +256,9 @@ bool BotAI::UpdateCommonBotAI(uint32 uiDiff)
 
         if (m_bot->IsInWorld())
         {
-            BotsEntry *botsEntry = sBotsRegistry->GetEntry(m_bot);
-
-            if (botsEntry)
+            if (Unit* owner = GetBotOwner())
             {
-                Unit* owner = const_cast<Unit *>(botsEntry->GetBotsOwner());
-                Player* player = owner->ToPlayer();
-
-                if (player)
+                if (Player* player = owner->ToPlayer())
                 {
                     if (Group const* grp = player->GetGroup())
                     {
@@ -298,13 +302,7 @@ bool BotAI::UpdateCommonBotAI(uint32 uiDiff)
 
 bool BotAI::DelayUpdateIfNeeded()
 {
-    Unit* owner = nullptr;
-    BotsEntry *botsEntry = sBotsRegistry->GetEntry(m_bot);
-
-    if (botsEntry)
-    {
-        owner = const_cast<Unit *>(botsEntry->GetBotsOwner());
-    }
+    Unit* owner = GetBotOwner();
 
     if (m_uiWaitTimer > m_lastUpdateDiff || (owner && !owner->IsInWorld()))
     {
@@ -433,8 +431,12 @@ void BotAI::BuildGrouUpdatePacket(WorldPacket* data)
     }
 }
 
-void BotAI::UpdateCommonTimes(uint32 uiDiff)
+void BotAI::UpdateCommonTimers(uint32 uiDiff)
 {
+    Events.Update(uiDiff);
+
+    UpdateSpellCD(uiDiff);
+
     if (m_potionTimer > uiDiff && (m_potionTimer < POTION_CD || !m_bot->IsInCombat()))
     {
         m_potionTimer -= uiDiff;
@@ -451,10 +453,10 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
         {
             m_uiFollowerTimer = 1000;
 
-            bool bIsMaxRangeExceeded = true;
-
             if (Unit* leader = GetLeaderForFollower())
             {
+                bool bIsMaxRangeExceeded = true;
+
                 if (HasBotState(STATE_FOLLOW_RETURNING))
                 {
                     LOG_DEBUG("npcbots", "bot [%s] is returning to leader.", m_bot->GetName().c_str());
@@ -486,7 +488,7 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
                     }
                     else
                     {
-                        if (m_bot->IsWithinDistInMap(leader, MAX_PLAYER_DISTANCE))
+                        if (m_bot->IsWithinDistInMap(player, MAX_PLAYER_DISTANCE))
                         {
                             bIsMaxRangeExceeded = false;
                         }
@@ -504,19 +506,37 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
                         }
                     }
                 }
+
+                if (bIsMaxRangeExceeded)
+                {
+                    LOG_DEBUG(
+                        "npcbots",
+                        "bot [%s] was too far away from leader [%s].",
+                        m_bot->GetName().c_str(),
+                        leader->GetName().c_str());
+
+                    // teleport bot to player
+                    Player* player = leader->ToPlayer();
+
+                    if (player)
+                    {
+                        float x, y, z, o;
+                        player->GetPosition(x, y, z, o);
+
+                        LOG_DEBUG("npcbots", "bot [%s] is teleporting to leader.", m_bot->GetName().c_str());
+                        BotMgr::TeleportBot(m_bot, player->GetMap(), x, y, z, o);
+                    }
+                    else
+                    {
+                        m_bot->DespawnOrUnsummon();
+                    }
+
+                    return;
+                }
             }
-
-            if (bIsMaxRangeExceeded)
+            else
             {
-                LOG_DEBUG(
-                    "npcbots",
-                    "bot [%s] was too far away from leader or leader not found. despawn...",
-                    m_bot->GetName().c_str());
-
-                // TODO: it's best to teleport bot to player?
-                BotMgr::DismissBot(m_bot);
-
-                return;
+                m_bot->DespawnOrUnsummon();
             }
         }
         else
@@ -528,7 +548,7 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
     {
         LOG_DEBUG("npcbots", "bot [%s] is set completed, despawns.", m_bot->GetName().c_str());
 
-        BotMgr::DismissBot(m_bot);
+        m_bot->DespawnOrUnsummon();
 
         return;
     }
@@ -556,6 +576,8 @@ void BotAI::UpdateAI(uint32 uiDiff)
 
 void BotAI::StartFollow(Unit* leader, uint32 factionForFollower)
 {
+    LOG_DEBUG("npcbots", "begin BotAI::StartFollow(%s, %u)", leader->GetName().c_str(), factionForFollower);
+
     if (HasBotState(STATE_FOLLOW_INPROGRESS))
     {
         LOG_WARN("npcbots", "bot [%s] attempt to StartFollow while already following.", m_bot->GetName().c_str());
@@ -689,7 +711,7 @@ bool BotAI::AssistPlayerInCombat(Unit* who)
     }
 
     //too far away and no free sight?
-    if (m_bot->IsWithinDistInMap(who, MAX_PLAYER_DISTANCE) && m_bot->IsWithinLOSInMap(who))
+    if (m_bot->IsWithinDistInMap(who, 20.0f) && m_bot->IsWithinLOSInMap(who))
     {
         AttackStart(who);
 
@@ -717,13 +739,7 @@ uint16 BotAI::Rand() const
 void BotAI::GenerateRand() const
 {
     int botCount = 0;
-    Unit* owner = nullptr;
-    BotsEntry *botsEntry = sBotsRegistry->GetEntry(m_bot);
-
-    if (botsEntry)
-    {
-        owner = const_cast<Unit *>(botsEntry->GetBotsOwner());
-    }
+    Unit* owner = GetBotOwner();
 
     if (owner)
     {
@@ -756,7 +772,8 @@ Unit* BotAI::FindAOETarget(float dist, uint32 minTargetNum) const
 
     if (unitList.size() < minTargetNum)
     {
-        LOG_DEBUG("npcbots", "there are %lu unfriend unit within %.1f yards.", unitList.size(), dist);
+//        LOG_DEBUG("npcbots", "there are %lu unfriend unit within %.1f yards.", unitList.size(), dist);
+
         return nullptr;
     }
 
@@ -799,7 +816,7 @@ Unit* BotAI::FindAOETarget(float dist, uint32 minTargetNum) const
                 {
                     if (++count > 2)
                     {
-                        if (m_bot->GetDistance(*it) < me->GetDistance(unit) && unit->HasInArc(float(M_PI) / 2, m_bot))
+                        if (m_bot->GetDistance(*it) < m_bot->GetDistance(unit) && unit->HasInArc(float(M_PI) / 2, m_bot))
                         {
                             unit = *it;
                         }
@@ -1187,3 +1204,189 @@ bool BotAI::IsPotionSpell(uint32 spellId) const
     return spellId == GetPotion(true) || spellId == GetPotion(false);
 }
 
+void BotAI::KillEvents(bool force)
+{
+    Events.KillAllEvents(force);
+}
+
+void BotAI::BotStopMovement()
+{
+    if (m_bot->IsInWorld())
+    {
+        m_bot->GetMotionMaster()->Clear();
+        m_bot->GetMotionMaster()->MoveIdle();
+    }
+
+    m_bot->StopMoving();
+    m_bot->DisableSpline();
+}
+
+//TeleportHome() ONLY CALLED THROUGH EVENTPROCESSOR
+void BotAI::TeleportHome()
+{
+    uint16 mapid;
+    Position pos;
+    GetHomePosition(mapid, &pos);
+
+    Map* map = sMapMgr->CreateBaseMap(mapid);
+
+    BotMgr::TeleportBot(
+                m_bot,
+                map,
+                pos.m_positionX,
+                pos.m_positionY,
+                pos.m_positionZ,
+                pos.m_orientation);
+}
+
+//FinishTeleport(uint32, float, float, float, float) ONLY CALLED THROUGH EVENTPROCESSOR
+bool BotAI::FinishTeleport()
+{
+    LOG_DEBUG("npcbots", "bot [%s] finishing teleport...", m_bot->GetName().c_str());
+
+    // 1) Cannot teleport: master disappeared - return home
+    if (IAmFree())
+    {
+        LOG_WARN("npcbots", "bot [%s] cannot teleport: master disappeared - return home.", m_bot->GetName().c_str());
+
+        TeleportHomeEvent* teleHomeEvent = new TeleportHomeEvent(this);
+        Events.AddEvent(teleHomeEvent, Events.CalculateTime(5)); //make sure event will be deleted
+
+        return false;
+    }
+
+    BotEntry *botsEntry = sBotsRegistry->GetEntry(m_bot);
+    Player const* player = GetBotOwner()->ToPlayer();
+    Map* map = player->FindMap();
+
+    // 2) Cannot teleport: map not found or forbidden - delay teleport
+    if (!map || !player->IsAlive() || BotMgr::RestrictBots(m_bot, true))
+    {
+        LOG_WARN("npcbots", "bot [%s] cannot teleport: map not found or forbidden - delay teleport.", m_bot->GetName().c_str());
+
+        TeleportFinishEvent* teleFinishEvent = new TeleportFinishEvent(this);
+        Events.AddEvent(teleFinishEvent, Events.CalculateTime(5));
+
+        return false;
+    }
+
+    m_bot->SetMap(map);
+    m_bot->Relocate(player);
+
+    // NOTICE!!! bot will init its motions master and ai after calls AddToMap()
+    bool botIsFollowing = HasBotState(STATE_FOLLOW_INPROGRESS);
+    Unit* leader = GetLeaderForFollower();
+
+    map->AddToMap(m_bot);
+
+    //*****************************************************
+    // TODO: log out hired bot registry contents here.
+    
+    //*****************************************************
+
+    BotStopMovement();
+
+    if (m_bot->IsAlive())
+    {
+        m_bot->CastSpell(m_bot, COSMETIC_TELEPORT_EFFECT, true);
+    }
+
+    // update group member online state
+    if (player)
+    {
+        if (Group* gr = const_cast<Group*>(player->GetGroup()))
+        {
+            if (gr->IsMember(m_bot->GetGUID()))
+            {
+                gr->SendUpdate();
+            }
+        }
+    }
+
+    if (botIsFollowing && leader && leader->IsAlive())
+    {
+        if (HasBotState(STATE_FOLLOW_INPROGRESS))
+        {
+            RemoveBotState(STATE_FOLLOW_INPROGRESS);
+        }
+
+        StartFollow(leader);
+    }
+
+    return true;
+}
+
+void BotAI::GetHomePosition(uint16& mapid, Position* pos) const
+{
+    CreatureData const* data = m_bot->GetCreatureData();
+
+    mapid = data->mapid;
+    pos->Relocate(data->posX, data->posY, data->posZ, data->orientation);
+}
+
+bool BotAI::OnBeforeOwnerTeleport(
+                    uint32 mapid, float x, float y, float z, float orientation,
+                    uint32 options,
+                    Unit* target)
+{
+    LOG_DEBUG(
+          "npcbots",
+          "☆☆☆ bot [%s] despawn due to owner move worldport/teleport...",
+          m_bot->GetName().c_str());
+
+    m_bot->DespawnOrUnsummon();
+
+    return true;
+}
+
+void BotAI::OnBotOwnerMoveWorldport(Player* owner)
+{
+    Map* botMap = m_bot->FindMap();
+
+    if ((m_bot->IsInWorld() || (botMap && botMap->IsDungeon())) &&
+        m_bot->IsAlive() &&
+        HasBotState(STATE_FOLLOW_INPROGRESS))
+    {
+        // teleport bot to player
+        BotMgr::TeleportBot(
+                    m_bot,
+                    owner->GetMap(),
+                    owner->m_positionX,
+                    owner->m_positionY,
+                    owner->m_positionZ,
+                    owner->m_orientation);
+    }
+    else
+    {
+        uint32 areaId, zoneId;
+        std::string zoneName = "unknown", areaName = "unknown";
+        LocaleConstant locale = sWorld->GetDefaultDbcLocale();
+
+        owner->GetMap()->GetZoneAndAreaId(
+                              owner->GetPhaseMask(),
+                              zoneId,
+                              areaId,
+                              owner->GetPositionX(),
+                              owner->GetPositionY(),
+                              owner->GetPositionZ());
+
+        if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(zoneId))
+        {
+            zoneName = zone->area_name[locale];
+        }
+
+        if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId))
+        {
+            areaName = area->area_name[locale];
+        }
+
+        LOG_DEBUG(
+            "npcbots",
+            "bot [%s] cannot worldport to player [%s] in [%s, %s, %s]",
+            m_bot->GetName().c_str(),
+            owner->GetName().c_str(),
+            areaName.c_str(),
+            zoneName.c_str(),
+            owner->GetMap()->GetMapName());
+    }
+}

@@ -24,6 +24,9 @@ enum BotCommonValues
 // COMMON CDs
     POTION_CD                           = 60000,    //default 60sec potion cd
     REGEN_CD                            = 1000,     // update hp/mana every X milliseconds
+
+//ADVANCED
+    COSMETIC_TELEPORT_EFFECT            = 52096     //visual instant cast omni
 };
 
 enum BotPetTypes

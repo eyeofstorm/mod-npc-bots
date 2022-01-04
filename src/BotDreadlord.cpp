@@ -9,6 +9,7 @@
 #include "Creature.h"
 #include "ScriptedGossip.h"
 #include "SpellAuras.h"
+#include "Unit.h"
 
 BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)
 {
@@ -33,6 +34,10 @@ BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)
     m_bot->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SNARE, true);
 
     InitCustomeSpells();
+}
+
+BotDreadlordAI::~BotDreadlordAI()
+{
 }
 
 void BotDreadlordAI::InitCustomeSpells()
@@ -174,7 +179,6 @@ void BotDreadlordAI::InitCustomeSpells()
 
 void BotDreadlordAI::UpdateBotAI(uint32 uiDiff)
 {
-    // TODO: replace this by own victim selection algorithm
     if (!UpdateVictim())
     {
         return;
@@ -186,10 +190,14 @@ void BotDreadlordAI::UpdateBotAI(uint32 uiDiff)
     {
         if (m_bot->GetPower(POWER_MANA) < CARRION_COST)
         {
+            LOG_INFO("npcbots", "bot [%s] drink mana potion.", m_bot->GetName().c_str());
+
             DrinkPotion(true);
         }
         else if (GetHealthPCT(m_bot) < 50)
         {
+            LOG_INFO("npcbots", "bot [%s] drink health potion.", m_bot->GetName().c_str());
+
             DrinkPotion(false);
         }
     }
@@ -359,7 +367,7 @@ void BotDreadlordAI::DoDreadlordAttackIfReady(uint32 uiDiff)
 
             GetNearbyTargetsInConeList(targets, 25); //real radius is 30
 
-            if (targets.size() > 1)
+            if (targets.size() > 3)
             {
                 cast = true;
             }
@@ -401,7 +409,7 @@ void BotDreadlordAI::OnClassSpellGo(SpellInfo const* spellInfo)
         if (result == SPELL_FAILED_SUCCESS || result == SPELL_CAST_OK)
         {
             DelayedSummonInfernoEvent* summonInfernoEvent = new DelayedSummonInfernoEvent(m_bot, m_infernoSpwanPos);
-            m_bot->m_Events.AddEvent(summonInfernoEvent, m_bot->m_Events.CalculateTime(500));
+            Events.AddEvent(summonInfernoEvent, Events.CalculateTime(500));
         }
     }
 }
@@ -418,6 +426,7 @@ void BotDreadlordAI::CheckAura(uint32 uiDiff)
     if (!m_bot->HasAura(VAMPIRIC_AURA, m_bot->GetGUID()))
     {
         LOG_DEBUG("npcbots", "bot [%s] refresh vampiric aura.", m_bot->GetName().c_str());
+
         RefreshAura(VAMPIRIC_AURA, 1, m_bot);
     }
 }
@@ -500,21 +509,26 @@ void BotDreadlordAI::SummonBotPet(const Position *pos)
 
     if (infernal)
     {
-        infernal->SetCreatorGUID(dreadlord->GetGUID());
         infernal->SetOwnerGUID(dreadlord->GetGUID());
-        infernal->SetFaction(dreadlord->GetFaction());
-        infernal->m_ControlledByPlayer = !IAmFree();
-        infernal->SetPvP(dreadlord->IsPvP());
-        infernal->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+        infernal->SetCreatorGUID(dreadlord->GetGUID());
         infernal->SetByteValue(UNIT_FIELD_BYTES_2, 1, dreadlord->GetByteValue(UNIT_FIELD_BYTES_2, 1));
+        infernal->SetFaction(dreadlord->GetFaction());
+        infernal->SetPvP(dreadlord->IsPvP());
+        infernal->SetPhaseMask(dreadlord->GetPhaseMask(), true);
         infernal->SetUInt32Value(UNIT_CREATED_BY_SPELL, INFERNO_1);
 
-        BotsEntry *botsEntry = sBotsRegistry->GetEntry(dreadlord);
+        BotEntry *botsEntry = sBotsRegistry->GetEntry(dreadlord);
 
         if (botsEntry)
         {
-            Unit const* owner = botsEntry->GetBotsOwner();
-            BotMgr::SetBotLevel(infernal, owner->getLevel(), false);
+            BotMgr::SetBotLevel(infernal, m_bot->getLevel(), false);
+        }
+
+        BotAI* infernalAI = const_cast<BotAI*>(BotMgr::GetBotAI(infernal));
+
+        if (infernalAI)
+        {
+            infernalAI->StartFollow(dreadlord);
         }
 
         // damage, stun
@@ -534,17 +548,10 @@ void BotDreadlordAI::SummonBotPet(const Position *pos)
         infernal->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SLEEP, true);
         infernal->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SNARE, true);
 
-        BotAI* infernalAI = BotMgr::GetBotAI(infernal);
-
-        if (infernalAI)
-        {
-            infernalAI->StartFollow(dreadlord);
-        }
-
         m_pet = infernal;
 
         DelayedUnsummonInfernoEvent* unsummonInfernoEvent = new DelayedUnsummonInfernoEvent(m_bot);
-        m_bot->m_Events.AddEvent(unsummonInfernoEvent, m_bot->m_Events.CalculateTime(INFERNAL_CD - 1800));
+        Events.AddEvent(unsummonInfernoEvent, Events.CalculateTime(INFERNAL_CD - 1800));
     }
     else
     {
@@ -560,6 +567,7 @@ void BotDreadlordAI::UnSummonBotPet()
     if (m_pet)
     {
         LOG_DEBUG("npcbots", "unsummon bot [%s]...", m_pet->GetName().c_str());
+
         m_pet->ToTempSummon()->UnSummon();
     }
 }
@@ -569,16 +577,17 @@ void BotDreadlordAI::SummonedCreatureDespawn(Creature* summon)
     if (summon == m_pet)
     {
         LOG_DEBUG("npcbots", "sumoned bot [%s] despawned...", summon->GetName().c_str());
+
         m_pet = nullptr;
     }
 }
 
 bool BotDreadlord::OnGossipHello(Player* player, Creature* bot)
 {
+    LOG_DEBUG("npcbots", "on gossip hello of bot [%s]", bot ? bot->GetName().c_str() : "unknown");
+
     if (bot)
     {
-        LOG_DEBUG("npcbots", "on gossip hello of [%s]", bot->GetName().c_str());
-
         player->PlayerTalkClass->ClearMenus();
 
         if (bot->GetOwnerGUID() == ObjectGuid::Empty)
@@ -588,16 +597,11 @@ bool BotDreadlord::OnGossipHello(Player* player, Creature* bot)
         }
         else
         {
-            BotsEntry* entry = sBotsRegistry->GetEntry(bot);
+            Unit const* owner = bot->GetOwner();
 
-            if (entry)
+            if (owner && owner->GetGUID() == player->GetGUID())
             {
-                Unit const* owner = entry->GetBotsOwner();
-
-                if (owner->GetGUID() == player->GetGUID())
-                {
-                    AddGossipItemFor(player, GOSSIP_ICON_BATTLE, "Dismiss.", GOSSIP_DREADLORD_SENDER_DISMISS, GOSSIP_ACTION_INFO_DEF + 1);
-                }
+                AddGossipItemFor(player, GOSSIP_ICON_BATTLE, "Dismiss.", GOSSIP_DREADLORD_SENDER_DISMISS, GOSSIP_ACTION_INFO_DEF + 1);
             }
 
             AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Nevermind", GOSSIP_DREADLORD_SENDER_EXIT_MENU, GOSSIP_ACTION_INFO_DEF + 2);
@@ -642,16 +646,11 @@ bool BotDreadlord::OnGossipSelect(Player* player, Creature* bot, uint32 sender, 
         {
             LOG_DEBUG("npcbots", "on gossip select: dismiss. [%s]", bot->GetName().c_str());
 
-            BotsEntry* entry = sBotsRegistry->GetEntry(bot);
+            Unit const* owner = bot->GetOwner();
 
-            if (entry)
+            if (owner && owner->GetGUID() == player->GetGUID())
             {
-                Unit const* owner = entry->GetBotsOwner();
-
-                if (owner->GetGUID() == player->GetGUID())
-                {
-                    BotMgr::DismissBot(bot);
-                }
+                BotMgr::DismissBot(bot);
             }
 
             break;

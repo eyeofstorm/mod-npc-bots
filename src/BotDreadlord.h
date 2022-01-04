@@ -119,10 +119,14 @@ public:
     BotDreadlordAI(Creature* creature);
 
 public:
+    virtual ~BotDreadlordAI();
+
+public:
     void SummonBotPet(Position const* pos) override;
     void UnSummonBotPet() override;
     void OnClassSpellGo(SpellInfo const* spellInfo) override;
     void SummonedCreatureDespawn(Creature* summon) override;
+    virtual bool IsPetAI() override { return false; }
 
 protected:
     void UpdateBotAI(uint32 uiDiff) override;
