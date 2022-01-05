@@ -344,7 +344,7 @@ public:
         if (BotMgr::GetBotAI(bot)->IAmFree() && bot->IsInWorld() && !bot->IsInCombat() && bot->IsAlive())
         {
             BotMgr::TeleportBot(
-                        const_cast<Creature*>(bot),
+                        bot,
                         player->GetMap(),
                         spawnPoint.m_positionX,
                         spawnPoint.m_positionY,

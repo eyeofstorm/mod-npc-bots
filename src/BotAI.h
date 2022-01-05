@@ -74,7 +74,8 @@ public:
     void SetBotOwner(Unit *owner) { m_owner = owner; }
     Creature* GetBot() const { return m_bot; }
     Creature* GetPet() const { return m_pet; }
-    ObjectGuid GetLeaderGuid() const { return m_uiLeaderGUID; }
+    ObjectGuid GetLeaderGUID() const { return m_uiLeaderGUID; }
+    void SetLeaderGUID(ObjectGuid leaderGUID) { m_uiLeaderGUID = leaderGUID; }
     uint32 GetBotSpellId(uint32 basespell) const;
 
 public:
@@ -94,9 +95,6 @@ public:
 
     void StartFollow(Unit* leader, uint32 factionForFollower = 0);
     void SetFollowComplete();
-    bool FinishTeleport();
-    void TeleportHome();
-    void GetHomePosition(uint16& mapid, Position* pos) const;
     bool OnBeforeOwnerTeleport(uint32 mapid, float x, float y, float z, float orientation, uint32 options, Unit* target);
     void BotStopMovement();
     Unit* GetLeaderForFollower();
@@ -165,6 +163,8 @@ protected:
     Unit* m_owner;
     Creature* m_bot;
     Creature* m_pet;
+
+    // leader guid of follower
     ObjectGuid m_uiLeaderGUID;
 
     // events process

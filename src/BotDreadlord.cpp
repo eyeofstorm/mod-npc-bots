@@ -584,8 +584,6 @@ void BotDreadlordAI::SummonedCreatureDespawn(Creature* summon)
 
 bool BotDreadlord::OnGossipHello(Player* player, Creature* bot)
 {
-    LOG_DEBUG("npcbots", "on gossip hello of bot [%s]", bot ? bot->GetName().c_str() : "unknown");
-
     if (bot)
     {
         player->PlayerTalkClass->ClearMenus();
@@ -622,19 +620,16 @@ bool BotDreadlord::OnGossipSelect(Player* player, Creature* bot, uint32 sender, 
     {
         case GOSSIP_DREADLORD_SENDER_EXIT_MENU: // exit
         {
-            LOG_DEBUG("npcbots", "on gossip select: exit. [%s]", bot->GetName().c_str());
             break;
         }
+
         case GOSSIP_DREADLORD_SENDER_MAIN_MENU: // return to main menu
         {
-            LOG_DEBUG("npcbots", "on gossip select: main menu. [%s]", bot->GetName().c_str());
             return OnGossipHello(player, bot);
         }
 
         case GOSSIP_DREADLORD_SENDER_HIRE:
         {
-            LOG_DEBUG("npcbots", "on gossip select: hire. [%s]", bot->GetName().c_str());
-
             if (bot->GetOwnerGUID() == ObjectGuid::Empty)
             {
                 BotMgr::HireBot(player, bot);
@@ -642,10 +637,9 @@ bool BotDreadlord::OnGossipSelect(Player* player, Creature* bot, uint32 sender, 
 
             break;
         }
+
         case GOSSIP_DREADLORD_SENDER_DISMISS:
         {
-            LOG_DEBUG("npcbots", "on gossip select: dismiss. [%s]", bot->GetName().c_str());
-
             Unit const* owner = bot->GetOwner();
 
             if (owner && owner->GetGUID() == player->GetGUID())

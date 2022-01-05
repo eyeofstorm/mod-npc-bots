@@ -10,11 +10,20 @@
 #include "BotAI.h"
 #include "Creature.h"
 #include "Map.h"
+#include "Player.h"
 #include "Unit.h"
 
 class BotEntry;
 class BotsRegistry;
 class BotMgr;
+
+enum eBotRegistryUpdateMode
+{
+    MODE_CREATE         = 0x0000,
+    MODE_UPDATE_HIRE    = 0x0001,
+    MODE_UPDATE_DISMISS = 0x0002,
+    MODE_DELETE         = 0x0004
+};
 
 typedef std::map<ObjectGuid, BotEntry*> BotEntryMap;
 
@@ -69,11 +78,16 @@ public:
     }
 
 public:
-    void RegisterOrUpdate(BotAI* ai);
+    void Register(BotAI* ai);
+    void Update(BotAI* ai, uint16 mode);
     void Unregister(BotAI* ai);
     BotEntry* GetEntry(Creature const* bot);
     BotEntryMap GetEntryByOwnerGUID(ObjectGuid ownerGUID);
     Creature* FindFirstBot(uint32 creatureTemplateEntry);
+
+public:
+    void LogHiredBotRegistryEntries();
+    void LogFreeBotRegistryEntries();
 
 private:
     BotEntryMap m_freeBotRegistry;
@@ -88,7 +102,7 @@ protected:
     BotMgr() { }
 
 public:
-    static void HireBot(Unit* /*owner*/, Creature* /*bot*/);
+    static void HireBot(Player* /*owner*/, Creature* /*bot*/);
     static bool DismissBot(Creature* /*bot*/);
 
     static BotAI const* GetBotAI(Creature const* /*bot*/);
@@ -100,12 +114,16 @@ public:
     static void OnPlayerMoveWorldport(Player* player);
 
     static EventProcessor *extracted(BotAI *oldAI);
-    
-    static void TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, float ori);
+
     static bool RestrictBots(Creature const* bot, bool add);
 
+    static bool TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, float ori);
+    static bool FinishTeleport(Creature* bot, BotAI* botAI);
+//    static void TeleportHome(Creature* bot);
+//    static void GetHomePosition(Creature* bot, uint16& mapid, Position* pos);
+
 private:
-    static void CleanupsBeforeBotRemove(Creature* /*bot*/);
+    static void CleanupsBeforeBotDismiss(Creature* /*bot*/);
 };
 
 #endif //_BOT_MGR_H 

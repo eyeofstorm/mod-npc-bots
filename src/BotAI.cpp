@@ -36,13 +36,32 @@ BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
     m_regenTimer = 0;
     m_energyFraction = 0.f;
 
+    m_uiLeaderGUID = ObjectGuid::Empty;
     m_uiBotState = STATE_FOLLOW_NONE;
 
-    m_owner = nullptr;
     m_bot = creature;
+
+    if (creature->GetOwnerGUID() != ObjectGuid::Empty)
+    {
+        if (Player* player = ObjectAccessor::FindPlayer(m_bot->GetOwnerGUID()))
+        {
+            m_owner = player;
+        }
+        else
+        {
+            m_owner = nullptr;
+        }
+    }
+    else
+    {
+        m_owner = nullptr;
+    }
+
     m_pet = nullptr;
 
-    sBotsRegistry->RegisterOrUpdate(this);
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotAI::BotAI (this: 0X%016llX, HasOwner: %s)", (uint64)this, creature->GetOwnerGUID() != ObjectGuid::Empty ? "yes" : "no");
+    sBotsRegistry->Register(this);
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotAI::BotAI (this: 0X%016llX, HasOwner: %s)", (uint64)this, creature->GetOwnerGUID() != ObjectGuid::Empty ? "yes" : "no");
 }
 
 BotAI::~BotAI()
@@ -54,7 +73,9 @@ BotAI::~BotAI()
         m_spells.erase(itr);
     }
 
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotAI::~BotAI (this: 0X%016llX, HasOwner: %s)", (uint64)this, m_bot->GetOwnerGUID() != ObjectGuid::Empty ? "yes" : "no");
     sBotsRegistry->Unregister(this);
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotAI::~BotAI (this: 0X%016llX, HasOwner: %s)", (uint64)this, m_bot->GetOwnerGUID() != ObjectGuid::Empty ? "yes" : "no");
 }
 
 void BotAI::MovementInform(uint32 motionType, uint32 pointId)
@@ -576,8 +597,6 @@ void BotAI::UpdateAI(uint32 uiDiff)
 
 void BotAI::StartFollow(Unit* leader, uint32 factionForFollower)
 {
-    LOG_DEBUG("npcbots", "begin BotAI::StartFollow(%s, %u)", leader->GetName().c_str(), factionForFollower);
-
     if (HasBotState(STATE_FOLLOW_INPROGRESS))
     {
         LOG_WARN("npcbots", "bot [%s] attempt to StartFollow while already following.", m_bot->GetName().c_str());
@@ -1221,109 +1240,6 @@ void BotAI::BotStopMovement()
     m_bot->DisableSpline();
 }
 
-//TeleportHome() ONLY CALLED THROUGH EVENTPROCESSOR
-void BotAI::TeleportHome()
-{
-    uint16 mapid;
-    Position pos;
-    GetHomePosition(mapid, &pos);
-
-    Map* map = sMapMgr->CreateBaseMap(mapid);
-
-    BotMgr::TeleportBot(
-                m_bot,
-                map,
-                pos.m_positionX,
-                pos.m_positionY,
-                pos.m_positionZ,
-                pos.m_orientation);
-}
-
-//FinishTeleport(uint32, float, float, float, float) ONLY CALLED THROUGH EVENTPROCESSOR
-bool BotAI::FinishTeleport()
-{
-    LOG_DEBUG("npcbots", "bot [%s] finishing teleport...", m_bot->GetName().c_str());
-
-    // 1) Cannot teleport: master disappeared - return home
-    if (IAmFree())
-    {
-        LOG_WARN("npcbots", "bot [%s] cannot teleport: master disappeared - return home.", m_bot->GetName().c_str());
-
-        TeleportHomeEvent* teleHomeEvent = new TeleportHomeEvent(this);
-        Events.AddEvent(teleHomeEvent, Events.CalculateTime(5)); //make sure event will be deleted
-
-        return false;
-    }
-
-    BotEntry *botsEntry = sBotsRegistry->GetEntry(m_bot);
-    Player const* player = GetBotOwner()->ToPlayer();
-    Map* map = player->FindMap();
-
-    // 2) Cannot teleport: map not found or forbidden - delay teleport
-    if (!map || !player->IsAlive() || BotMgr::RestrictBots(m_bot, true))
-    {
-        LOG_WARN("npcbots", "bot [%s] cannot teleport: map not found or forbidden - delay teleport.", m_bot->GetName().c_str());
-
-        TeleportFinishEvent* teleFinishEvent = new TeleportFinishEvent(this);
-        Events.AddEvent(teleFinishEvent, Events.CalculateTime(5));
-
-        return false;
-    }
-
-    m_bot->SetMap(map);
-    m_bot->Relocate(player);
-
-    // NOTICE!!! bot will init its motions master and ai after calls AddToMap()
-    bool botIsFollowing = HasBotState(STATE_FOLLOW_INPROGRESS);
-    Unit* leader = GetLeaderForFollower();
-
-    map->AddToMap(m_bot);
-
-    //*****************************************************
-    // TODO: log out hired bot registry contents here.
-    
-    //*****************************************************
-
-    BotStopMovement();
-
-    if (m_bot->IsAlive())
-    {
-        m_bot->CastSpell(m_bot, COSMETIC_TELEPORT_EFFECT, true);
-    }
-
-    // update group member online state
-    if (player)
-    {
-        if (Group* gr = const_cast<Group*>(player->GetGroup()))
-        {
-            if (gr->IsMember(m_bot->GetGUID()))
-            {
-                gr->SendUpdate();
-            }
-        }
-    }
-
-    if (botIsFollowing && leader && leader->IsAlive())
-    {
-        if (HasBotState(STATE_FOLLOW_INPROGRESS))
-        {
-            RemoveBotState(STATE_FOLLOW_INPROGRESS);
-        }
-
-        StartFollow(leader);
-    }
-
-    return true;
-}
-
-void BotAI::GetHomePosition(uint16& mapid, Position* pos) const
-{
-    CreatureData const* data = m_bot->GetCreatureData();
-
-    mapid = data->mapid;
-    pos->Relocate(data->posX, data->posY, data->posZ, data->orientation);
-}
-
 bool BotAI::OnBeforeOwnerTeleport(
                     uint32 mapid, float x, float y, float z, float orientation,
                     uint32 options,
@@ -1341,9 +1257,9 @@ bool BotAI::OnBeforeOwnerTeleport(
 
 void BotAI::OnBotOwnerMoveWorldport(Player* owner)
 {
-    Map* botMap = m_bot->FindMap();
+    Map* botCurMap = m_bot->FindMap();
 
-    if ((m_bot->IsInWorld() || (botMap && botMap->IsDungeon())) &&
+    if ((m_bot->IsInWorld() || (botCurMap && botCurMap->IsDungeon())) &&
         m_bot->IsAlive() &&
         HasBotState(STATE_FOLLOW_INPROGRESS))
     {
@@ -1382,8 +1298,13 @@ void BotAI::OnBotOwnerMoveWorldport(Player* owner)
 
         LOG_DEBUG(
             "npcbots",
-            "bot [%s] cannot worldport to player [%s] in [%s, %s, %s]",
+            "bot [Name: %s, IsInWorld: %s, Map: %s, IsDungeon: %s, IsAlive: %s, IsFollowed: %s] cannot worldport to player [%s] in [%s, %s, %s].",
             m_bot->GetName().c_str(),
+            m_bot->IsInWorld() ? "true" : "false",
+            botCurMap ? botCurMap->GetMapName() : "unknown",
+            botCurMap && botCurMap->IsDungeon() ? "true" : "false",
+            m_bot->IsAlive() ? "true" : "false",
+            HasBotState(STATE_FOLLOW_INPROGRESS) ? "true" : "false",
             owner->GetName().c_str(),
             areaName.c_str(),
             zoneName.c_str(),

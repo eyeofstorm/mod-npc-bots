@@ -9,45 +9,44 @@
 
 #include "BotAI.h"
 #include "BotMgr.h"
+#include "Creature.h"
 #include "EventProcessor.h"
 
-class TeleportHomeEvent : public BasicEvent
-{
-    friend class BotAI;
+//class TeleportHomeEvent : public BasicEvent
+//{
+//    friend class BotMgr;
+//
+//    protected:
+//        TeleportHomeEvent(Creature* bot) : m_bot(bot) {}
+//        ~TeleportHomeEvent() {}
+//
+//        bool Execute(uint64 /*e_time*/, uint32 /*p_time*/)
+//        {
+//            BotMgr::TeleportHome(m_bot);
+//            return true;
+//        }
+//
+//    private:
+//        Creature* m_bot;
+//};
 
-    protected:
-        TeleportHomeEvent(BotAI* ai) : _ai(ai) {}
-        ~TeleportHomeEvent() {}
-
-        bool Execute(uint64 /*e_time*/, uint32 /*p_time*/)
-        {
-            _ai->TeleportHome();
-            return true;
-        }
-
-    private:
-        BotAI* _ai;
-};
-
-//Delayed teleport finish: adds bot back to world on new location
 class TeleportFinishEvent : public BasicEvent
 {
-    friend class BotAI;
     friend class BotMgr;
 
     protected:
-        TeleportFinishEvent(BotAI* ai) : _ai(ai) {}
-        ~TeleportFinishEvent() {}
+        TeleportFinishEvent(Creature* bot, BotAI* botAI) : m_bot(bot), m_botAI(botAI) {  }
+        ~TeleportFinishEvent() {  }
 
         //Execute is always called while creature is out of world so ai is never deleted
         bool Execute(uint64 /*e_time*/, uint32 /*p_time*/)
         {
-            _ai->FinishTeleport();
-            return true;
+            return BotMgr::FinishTeleport(m_bot, m_botAI);
         }
 
     private:
-        BotAI* _ai;
+        Creature* m_bot;
+        BotAI* m_botAI;
 };
 
 #endif  //_BOT_EVENTS_H
