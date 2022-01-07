@@ -51,6 +51,8 @@ uint32 const HealingPotionSpells[MAX_POTION_SPELLS][2] =
 
 class BotAI : public ScriptedAI
 {
+    friend class BotMgr;
+
 protected:
     explicit BotAI(Creature* creature);
 

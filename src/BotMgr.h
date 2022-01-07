@@ -53,7 +53,7 @@ public:
     Creature* GetBot() const { return m_botAI->GetBot(); }
     Creature* GetPet() const { return m_botAI->GetPet(); }
 
-    bool IsFreeBot() const { return m_botAI->GetBot()->GetOwnerGUID() == ObjectGuid::Empty; }
+    bool IsFreeBot() const { return m_botAI->IAmFree(); }
 
 private:
     BotAI* m_botAI;
@@ -113,14 +113,12 @@ public:
     static void OnBotSpellGo(Unit const* caster, Spell const* spell, bool ok = true);
     static void OnPlayerMoveWorldport(Player* player);
 
-    static EventProcessor *extracted(BotAI *oldAI);
-
     static bool RestrictBots(Creature const* bot, bool add);
 
     static bool TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, float ori);
+    static void TeleportBotHome(Creature* bot);
     static bool FinishTeleport(Creature* bot, BotAI* botAI);
-//    static void TeleportHome(Creature* bot);
-//    static void GetHomePosition(Creature* bot, uint16& mapid, Position* pos);
+    static void GetHomePosition(Creature* bot, uint16& mapid, Position* pos);
 
 private:
     static void CleanupsBeforeBotDismiss(Creature* /*bot*/);

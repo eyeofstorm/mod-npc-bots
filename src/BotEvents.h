@@ -12,23 +12,23 @@
 #include "Creature.h"
 #include "EventProcessor.h"
 
-//class TeleportHomeEvent : public BasicEvent
-//{
-//    friend class BotMgr;
-//
-//    protected:
-//        TeleportHomeEvent(Creature* bot) : m_bot(bot) {}
-//        ~TeleportHomeEvent() {}
-//
-//        bool Execute(uint64 /*e_time*/, uint32 /*p_time*/)
-//        {
-//            BotMgr::TeleportHome(m_bot);
-//            return true;
-//        }
-//
-//    private:
-//        Creature* m_bot;
-//};
+class TeleportHomeEvent : public BasicEvent
+{
+    friend class BotMgr;
+
+    protected:
+        TeleportHomeEvent(Creature* bot) : m_bot(bot) {}
+        ~TeleportHomeEvent() {}
+
+        bool Execute(uint64 /*e_time*/, uint32 /*p_time*/)
+        {
+            BotMgr::TeleportBotHome(m_bot);
+            return true;
+        }
+
+    private:
+        Creature* m_bot;
+};
 
 class TeleportFinishEvent : public BasicEvent
 {

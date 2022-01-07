@@ -104,9 +104,9 @@ void BotDreadlordAI::InitCustomeSpells()
     sinfo->Mechanic = MECHANIC_SLEEP;
     sinfo->RangeEntry = sSpellRangeStore.LookupEntry(4); //30 yds
     sinfo->CastTimeEntry = sSpellCastTimesStore.LookupEntry(3); //500ms
-    sinfo->RecoveryTime = 6000;
+    sinfo->RecoveryTime = SLEEP_CD;
     sinfo->DurationEntry = sSpellDurationStore.LookupEntry(3); //60000ms
-    sinfo->ManaCost = 50 * 5;
+    sinfo->ManaCost = SLEEP_COST;
     sinfo->ManaCostPercentage = 0;
     sinfo->ManaCostPerlevel = 0;
     sinfo->AuraInterruptFlags = AURA_INTERRUPT_FLAG_DIRECT_DAMAGE;
@@ -132,10 +132,10 @@ void BotDreadlordAI::InitCustomeSpells()
     sinfo->BaseLevel = 40;
     sinfo->MaxTargetLevel = 83;
     sinfo->RangeEntry = sSpellRangeStore.LookupEntry(4); //30 yds
-    sinfo->RecoveryTime = 10000;
+    sinfo->RecoveryTime = CARRION_CD;
     sinfo->StartRecoveryCategory = 133;
     sinfo->StartRecoveryTime = 1500;
-    sinfo->ManaCost = 110 * 5;
+    sinfo->ManaCost = CARRION_COST;
     sinfo->Attributes &= ~(SPELL_ATTR0_WEARER_CASTS_PROC_TRIGGER);
     sinfo->AttributesEx |= SPELL_ATTR1_NO_REDIRECTION | SPELL_ATTR1_NO_REFLECTION;
     sinfo->AttributesEx2 |= SPELL_ATTR2_CANT_CRIT;
@@ -161,7 +161,7 @@ void BotDreadlordAI::InitCustomeSpells()
     sinfo->RecoveryTime = INFERNAL_CD;
     sinfo->StartRecoveryTime = 1500;
     sinfo->StartRecoveryCategory = 133;
-    sinfo->ManaCost = 175 * 5;
+    sinfo->ManaCost = INFERNAL_COST;
     sinfo->ExplicitTargetMask = TARGET_FLAG_DEST_LOCATION;
     sinfo->Attributes &= ~(SPELL_ATTR0_IS_ABILITY);
     sinfo->AttributesEx |= SPELL_ATTR1_NO_THREAT;
@@ -229,43 +229,26 @@ bool BotDreadlordAI::DoSummonInfernoIfReady(uint32 uiDiff)
     if (isSpellReady && !m_pet && isInCombat && hasMana && Rand() < 60)
     {
         float maxRange = DoGetSpellMaxRange(INFERNO_1);
-
-        Unit* victim = m_bot->GetVictim();
         Unit* target = FindAOETarget(maxRange, 3);
 
         if (target)
         {
             m_infernoSpwanPos = target->GetPosition();
-        }
-        else if (victim)
-        {
-            m_infernoSpwanPos = victim->GetPosition();
-        }
-        else
-        {
-            m_bot->GetNearPoint(
-                        m_bot,
-                        m_infernoSpwanPos.m_positionX,
-                        m_infernoSpwanPos.m_positionY,
-                        m_infernoSpwanPos.m_positionZ,
-                        m_bot->GetObjectSize(),
-                        5.0f,
-                        0.0f);
-        }
 
-        // dummy summon infernal
-        SpellCastResult result = m_bot->CastSpell(
-                                            m_infernoSpwanPos.m_positionX,
-                                            m_infernoSpwanPos.m_positionY,
-                                            m_infernoSpwanPos.m_positionZ,
-                                            INFERNO_1,
-                                            false);
+            // dummy summon infernal
+            SpellCastResult result = m_bot->CastSpell(
+                                                m_infernoSpwanPos.m_positionX,
+                                                m_infernoSpwanPos.m_positionY,
+                                                m_infernoSpwanPos.m_positionZ,
+                                                INFERNO_1,
+                                                false);
 
-        if (result == SPELL_FAILED_SUCCESS || result == SPELL_CAST_OK)
-        {
-            SetSpellCooldown(INFERNO_1, INFERNAL_CD);
+            if (result == SPELL_FAILED_SUCCESS || result == SPELL_CAST_OK)
+            {
+                SetSpellCooldown(INFERNO_1, INFERNAL_CD);
 
-            return true;
+                return true;
+            }
         }
     }
 
@@ -355,19 +338,13 @@ void BotDreadlordAI::DoDreadlordAttackIfReady(uint32 uiDiff)
 
         bool cast = false;
 
-        if (target && m_bot->HasInArc(float(M_PI) / 2, target) && m_bot->GetDistance(target) < 25 &&
-            (GetManaPCT(me) > 60 || m_bot->getAttackers().empty() || GetHealthPCT(me) < 50 || target->HasAura(SLEEP_1)))
+        std::list<Unit*> targets;
+        GetNearbyTargetsInConeList(targets, 15); //real radius is 20
+
+        if (targets.size() > 3)
         {
-            cast = true;
-        }
-
-        if (!cast)
-        {
-            std::list<Unit*> targets;
-
-            GetNearbyTargetsInConeList(targets, 25); //real radius is 30
-
-            if (targets.size() > 3)
+            if (target && m_bot->HasInArc(float(M_PI) / 2, target) && m_bot->GetDistance(target) < 15 &&
+                (GetManaPCT(me) > 60 || m_bot->getAttackers().empty() || GetHealthPCT(me) < 50 || target->HasAura(SLEEP_1)))
             {
                 cast = true;
             }
@@ -509,27 +486,24 @@ void BotDreadlordAI::SummonBotPet(const Position *pos)
 
     if (infernal)
     {
-        infernal->SetOwnerGUID(dreadlord->GetGUID());
-        infernal->SetCreatorGUID(dreadlord->GetGUID());
-        infernal->SetByteValue(UNIT_FIELD_BYTES_2, 1, dreadlord->GetByteValue(UNIT_FIELD_BYTES_2, 1));
-        infernal->SetFaction(dreadlord->GetFaction());
-        infernal->SetPvP(dreadlord->IsPvP());
-        infernal->SetPhaseMask(dreadlord->GetPhaseMask(), true);
+        Unit* master = m_owner ? m_owner : dreadlord;
+        BotAI* infernalAI = (BotAI *)infernal->AI();
+
+        infernal->SetOwnerGUID(master->GetGUID());
+        infernal->SetCreatorGUID(master->GetGUID());
+        infernal->SetByteValue(UNIT_FIELD_BYTES_2, 1, master->GetByteValue(UNIT_FIELD_BYTES_2, 1));
+        infernal->SetFaction(master->GetFaction());
+        infernal->SetPvP(master->IsPvP());
+        infernal->SetPhaseMask(master->GetPhaseMask(), true);
         infernal->SetUInt32Value(UNIT_CREATED_BY_SPELL, INFERNO_1);
+        infernal->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+        infernal->m_ControlledByPlayer = true;
 
-        BotEntry *botsEntry = sBotsRegistry->GetEntry(dreadlord);
+        BotMgr::SetBotLevel(infernal, master->getLevel(), false);
 
-        if (botsEntry)
-        {
-            BotMgr::SetBotLevel(infernal, m_bot->getLevel(), false);
-        }
-
-        BotAI* infernalAI = const_cast<BotAI*>(BotMgr::GetBotAI(infernal));
-
-        if (infernalAI)
-        {
-            infernalAI->StartFollow(dreadlord);
-        }
+        infernalAI->SetBotOwner(dreadlord);
+        sBotsRegistry->Update(infernalAI, MODE_UPDATE_HIRE);
+        infernalAI->StartFollow(dreadlord);
 
         // damage, stun
         infernal->CastSpell(infernal, SPELL_INFERNO_EFFECT, true);
@@ -551,7 +525,7 @@ void BotDreadlordAI::SummonBotPet(const Position *pos)
         m_pet = infernal;
 
         DelayedUnsummonInfernoEvent* unsummonInfernoEvent = new DelayedUnsummonInfernoEvent(m_bot);
-        Events.AddEvent(unsummonInfernoEvent, Events.CalculateTime(INFERNAL_CD - 1800));
+        Events.AddEvent(unsummonInfernoEvent, Events.CalculateTime(INFERNAL_CD - 2300));
     }
     else
     {
@@ -588,7 +562,9 @@ bool BotDreadlord::OnGossipHello(Player* player, Creature* bot)
     {
         player->PlayerTalkClass->ClearMenus();
 
-        if (bot->GetOwnerGUID() == ObjectGuid::Empty)
+        BotAI* botAI = (BotAI *)bot->AI();
+
+        if (!botAI->GetBotOwner())
         {
             AddGossipItemFor(player, GOSSIP_ICON_BATTLE, "I need your services.", GOSSIP_DREADLORD_SENDER_HIRE, GOSSIP_ACTION_INFO_DEF + 1);
             AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Nevermind", GOSSIP_DREADLORD_SENDER_EXIT_MENU, GOSSIP_ACTION_INFO_DEF + 2);
@@ -630,7 +606,9 @@ bool BotDreadlord::OnGossipSelect(Player* player, Creature* bot, uint32 sender, 
 
         case GOSSIP_DREADLORD_SENDER_HIRE:
         {
-            if (bot->GetOwnerGUID() == ObjectGuid::Empty)
+            BotAI* botAI = (BotAI *)bot->AI();
+
+            if (!botAI->GetBotOwner())
             {
                 BotMgr::HireBot(player, bot);
             }

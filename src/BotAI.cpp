@@ -30,6 +30,8 @@ static uint16 __rand; //calculated for each bot separately once every updateAI t
 
 BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
 {
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotAI::BotAI (this: 0X%016llX, name: %s)", (uint64)this, creature->GetName().c_str());
+
     m_uiFollowerTimer = 2500;
     m_uiWaitTimer = 0;
     m_uiUpdateTimerMedium = 0;
@@ -49,7 +51,7 @@ BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
         }
         else
         {
-            m_owner = nullptr;
+            m_owner = ObjectAccessor::GetUnit(*creature, creature->GetOwnerGUID());
         }
     }
     else
@@ -59,13 +61,15 @@ BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
 
     m_pet = nullptr;
 
-    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotAI::BotAI (this: 0X%016llX, HasOwner: %s)", (uint64)this, creature->GetOwnerGUID() != ObjectGuid::Empty ? "yes" : "no");
     sBotsRegistry->Register(this);
-    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotAI::BotAI (this: 0X%016llX, HasOwner: %s)", (uint64)this, creature->GetOwnerGUID() != ObjectGuid::Empty ? "yes" : "no");
+
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotAI::BotAI (this: 0X%016llX, name: %s)", (uint64)this, creature->GetName().c_str());
 }
 
 BotAI::~BotAI()
 {
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotAI::~BotAI (this: 0X%016llX, name: %s)", (uint64)this, m_bot->GetName().c_str());
+
     while (!m_spells.empty())
     {
         BotSpellMap::iterator itr = m_spells.begin();
@@ -73,9 +77,9 @@ BotAI::~BotAI()
         m_spells.erase(itr);
     }
 
-    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotAI::~BotAI (this: 0X%016llX, HasOwner: %s)", (uint64)this, m_bot->GetOwnerGUID() != ObjectGuid::Empty ? "yes" : "no");
     sBotsRegistry->Unregister(this);
-    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotAI::~BotAI (this: 0X%016llX, HasOwner: %s)", (uint64)this, m_bot->GetOwnerGUID() != ObjectGuid::Empty ? "yes" : "no");
+
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotAI::~BotAI (this: 0X%016llX, name: %s)", (uint64)this, m_bot->GetName().c_str());
 }
 
 void BotAI::MovementInform(uint32 motionType, uint32 pointId)
@@ -742,12 +746,12 @@ bool BotAI::AssistPlayerInCombat(Unit* who)
 
 bool BotAI::IAmFree() const
 {
-    if (m_bot->GetOwnerGUID() == ObjectGuid::Empty)
+    if (m_owner)
     {
-        return true;
+        return false;
     }
 
-    return false;
+    return true;
 }
 
 uint16 BotAI::Rand() const
@@ -791,8 +795,6 @@ Unit* BotAI::FindAOETarget(float dist, uint32 minTargetNum) const
 
     if (unitList.size() < minTargetNum)
     {
-//        LOG_DEBUG("npcbots", "there are %lu unfriend unit within %.1f yards.", unitList.size(), dist);
-
         return nullptr;
     }
 
