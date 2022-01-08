@@ -7,15 +7,16 @@
 #ifndef _BOT_MGR_H
 #define _BOT_MGR_H
 
-#include "BotAI.h"
-#include "Creature.h"
-#include "Map.h"
-#include "Player.h"
-#include "Unit.h"
+#include "BotCommon.h"
 
 class BotEntry;
-class BotsRegistry;
 class BotMgr;
+class BotsRegistry;
+class BotAI;
+class Creature;
+class Map;
+class Player;
+class Unit;
 
 enum eBotRegistryUpdateMode
 {
@@ -34,8 +35,6 @@ class BotEntry
 private:
     explicit BotEntry(BotAI* ai)
     {
-        ASSERT(ai != nullptr);
-
         m_botAI = ai;
     }
 
@@ -112,13 +111,9 @@ public:
     //onEvent hooks
     static void OnBotSpellGo(Unit const* caster, Spell const* spell, bool ok = true);
     static void OnPlayerMoveWorldport(Player* player);
-
+    static void OnPlayerMoveTeleport(Player* player);
     static bool RestrictBots(Creature const* bot, bool add);
-
     static bool TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, float ori);
-    static void TeleportBotHome(Creature* bot);
-    static bool FinishTeleport(Creature* bot, BotAI* botAI);
-    static void GetHomePosition(Creature* bot, uint16& mapid, Position* pos);
 
 private:
     static void CleanupsBeforeBotDismiss(Creature* /*bot*/);

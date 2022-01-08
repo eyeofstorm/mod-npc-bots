@@ -4,6 +4,8 @@
  * License: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
  */
 
+#include "Creature.h"
+#include "BotAI.h"
 #include "BotCommon.h"
 #include "BotEvents.h"
 #include "BotMgr.h"
@@ -12,6 +14,8 @@
 #include "Log.h"
 #include "Map.h"
 #include "MapMgr.h"
+#include "Player.h"
+#include "Unit.h"
 
 void BotMgr::HireBot(Player* owner, Creature* bot)
 {
@@ -64,8 +68,10 @@ bool BotMgr::DismissBot(Creature* bot)
 
         if (!map || map->IsDungeon())
         {
-            TeleportHomeEvent* homeEvent = new TeleportHomeEvent(bot);
-            bot->m_Events.AddEvent(homeEvent, bot->m_Events.CalculateTime(50));
+            BotAI* botAI = (BotAI *)bot->AI();
+
+            TeleportHomeEvent* homeEvent = new TeleportHomeEvent(botAI);
+            botAI->GetEvents()->AddEvent(homeEvent, botAI->GetEvents()->CalculateTime(50));
         }
         else
         {
@@ -210,6 +216,34 @@ void BotMgr::OnPlayerMoveWorldport(Player* player)
     }
 }
 
+void BotMgr::OnPlayerMoveTeleport(Player* player)
+{
+    if (!player)
+    {
+        return;
+    }
+
+    BotEntryMap botsMap = sBotsRegistry->GetEntryByOwnerGUID(player->GetGUID());
+
+    if (!botsMap.empty())
+    {
+        for (BotEntryMap::iterator itr = botsMap.begin(); itr != botsMap.end(); ++itr)
+        {
+            BotEntry* entry = itr->second;
+
+            if (entry)
+            {
+                BotAI* ai = entry->GetBotAI();
+
+                if (ai)
+                {
+                    ai->OnBotOwnerMoveTeleport(player);
+                }
+            }
+        }
+    }
+}
+
 bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, float ori)
 {
     BotAI* oldAI = (BotAI *)bot->AI();
@@ -238,7 +272,7 @@ bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, 
 
         LOG_INFO(
             "npcbots",
-            "bot [%s] after remove from map [%s]. old AI(0X%016llX)",
+            "remove bot [%s] from map [%s]. old AI(0X%016llX)",
             bot->GetName().c_str(),
             mymap->GetMapName(),
             (uint64)oldAI);
@@ -265,7 +299,7 @@ bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, 
     bot->SetMap(newMap);
 
     // NOTICE!!!
-    // call AddToMap function on bot will lead to create a new AI instance for it.
+    // call function AddToMap below on bot will lead to create a new BotAI instance for it.
     // so wo need save some old AI's state before call AddToMap function.
     Unit* leader = oldAI->GetLeaderForFollower();
     
@@ -282,91 +316,20 @@ bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, 
 
     LOG_INFO(
          "npcbots",
-         "bot [%s] after add to map [%s]. old AI(0X%016llX), new AI(0X%016llX))",
+         "add bot [%s] back to map [%s]. old AI(0X%016llX), new AI(0X%016llX))",
          bot->GetName().c_str(),
          newMap->GetMapName(),
          (uint64)oldAI,
          (uint64)newAI);
 
+    // restore saved old BotAI state.
     if (leader)
     {
         newAI->SetLeaderGUID(leader->GetGUID());
     }
 
-    TeleportFinishEvent* finishEvent = new TeleportFinishEvent(bot, newAI);
-    bot->m_Events.AddEvent(finishEvent, bot->m_Events.CalculateTime(50));
-}
-
-bool BotMgr::FinishTeleport(Creature* bot, BotAI* botAI)
-{
-    LOG_DEBUG("npcbots", "bot [%s] finishing teleport...", bot->GetName().c_str());
-
-    if (bot->IsAlive())
-    {
-        bot->CastSpell(bot, COSMETIC_TELEPORT_EFFECT, true);
-    }
-
-    Unit* owner = botAI->GetBotOwner();
-
-    if (owner)
-    {
-        Map* map = owner->FindMap();
-
-        // update group member online state
-        if (Player const* player = owner->ToPlayer())
-        {
-            if (Group* gr = const_cast<Group*>(player->GetGroup()))
-            {
-                if (gr->IsMember(bot->GetGUID()))
-                {
-                    gr->SendUpdate();
-                }
-            }
-        }
-    }
-
-    Unit* leader = botAI->GetLeaderForFollower();
-
-    if (leader && leader->IsAlive())
-    {
-        if (botAI->HasBotState(STATE_FOLLOW_INPROGRESS))
-        {
-            botAI->RemoveBotState(STATE_FOLLOW_INPROGRESS);
-        }
-
-        botAI->StartFollow(leader);
-    }
-
-    return true;
-}
-
-void BotMgr::TeleportBotHome(Creature* bot)
-{
-    ASSERT(bot != nullptr);
-
-    uint16 mapid;
-    Position pos;
-
-    GetHomePosition(bot, mapid, &pos);
-    Map* map = sMapMgr->CreateBaseMap(mapid);
-
-    LOG_DEBUG("npcbots", "bot [%s] teleport to home [%s].", bot->GetName().c_str(), map ? map->GetMapName() : "known");
-
-    TeleportBot(
-        bot,
-        map,
-        pos.m_positionX,
-        pos.m_positionY,
-        pos.m_positionZ,
-        pos.m_orientation);
-}
-
-void BotMgr::GetHomePosition(Creature* bot, uint16& mapid, Position* pos)
-{
-    CreatureData const* data = bot->GetCreatureData();
-
-    mapid = data->mapid;
-    pos->Relocate(data->posX, data->posY, data->posZ, data->orientation);
+    TeleportFinishEvent* finishEvent = new TeleportFinishEvent(newAI);
+    newAI->GetEvents()->AddEvent(finishEvent, newAI->GetEvents()->CalculateTime(urand(5000, 8000)));
 }
 
 bool BotMgr::RestrictBots(Creature const* bot, bool add)

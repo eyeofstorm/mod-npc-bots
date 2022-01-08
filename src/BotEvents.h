@@ -7,45 +7,43 @@
 #ifndef _BOT_EVENTS_H
 #define _BOT_EVENTS_H
 
-#include "BotAI.h"
-#include "BotMgr.h"
-#include "Creature.h"
 #include "EventProcessor.h"
 
 class TeleportHomeEvent : public BasicEvent
 {
+    friend class BotAI;
     friend class BotMgr;
 
     protected:
-        TeleportHomeEvent(Creature* bot) : m_bot(bot) {}
+        TeleportHomeEvent(BotAI* botAI) : m_botAI(botAI) {}
         ~TeleportHomeEvent() {}
 
         bool Execute(uint64 /*e_time*/, uint32 /*p_time*/)
         {
-            BotMgr::TeleportBotHome(m_bot);
+            m_botAI->BotTeleportHome();
             return true;
         }
 
     private:
-        Creature* m_bot;
+        BotAI* m_botAI;
 };
 
 class TeleportFinishEvent : public BasicEvent
 {
+    friend class BotAI;
     friend class BotMgr;
 
     protected:
-        TeleportFinishEvent(Creature* bot, BotAI* botAI) : m_bot(bot), m_botAI(botAI) {  }
+        TeleportFinishEvent(BotAI* botAI) : m_botAI(botAI) {  }
         ~TeleportFinishEvent() {  }
 
-        //Execute is always called while creature is out of world so ai is never deleted
+        // Execute is always called while creature is out of world so ai is never deleted
         bool Execute(uint64 /*e_time*/, uint32 /*p_time*/)
         {
-            return BotMgr::FinishTeleport(m_bot, m_botAI);
+            return m_botAI->BotFinishTeleport();
         }
 
     private:
-        Creature* m_bot;
         BotAI* m_botAI;
 };
 

@@ -5,10 +5,11 @@
  */
 
 #include "BotDreadlord.h"
+#include "BotEvents.h"
 #include "BotMgr.h"
-#include "Creature.h"
 #include "ScriptedGossip.h"
 #include "SpellAuras.h"
+#include "Player.h"
 #include "Unit.h"
 
 BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)

@@ -7,6 +7,52 @@
 #ifndef _BOT_COMMON_H
 #define _BOT_COMMON_H
 
+#include "SharedDefines.h"
+#include "SpellAuraDefines.h"
+
+#include <utility>
+#include <vector>
+#include <map>
+
+#define BOT_FOLLOW_DIST  3.0f
+#define BOT_FOLLOW_ANGLE (M_PI/2)
+
+enum eFollowState
+{
+    STATE_FOLLOW_NONE       = 0x000,
+    STATE_FOLLOW_INPROGRESS = 0x001,    //must always have this state for any follow
+    STATE_FOLLOW_RETURNING  = 0x002,    //when returning to combat start after being in combat
+    STATE_FOLLOW_PAUSED     = 0x004,    //disables following
+    STATE_FOLLOW_COMPLETE   = 0x008     //follow is completed and may end
+};
+
+#define MAX_POTION_SPELLS 8
+#define MAX_FEAST_SPELLS 11
+
+uint32 const ManaPotionSpells[MAX_POTION_SPELLS][2] =
+{
+    {  5,   437 },
+    { 14,   438 },
+    { 22,  2023 },
+    { 31, 11903 },
+    { 41, 17530 },
+    { 49, 17531 },
+    { 55, 28499 },
+    { 70, 43186 }
+};
+
+uint32 const HealingPotionSpells[MAX_POTION_SPELLS][2] =
+{
+    {  1,   439 },
+    {  3,   440 },
+    { 12,   441 },
+    { 21,  2024 },
+    { 35,  4042 },
+    { 45, 17534 },
+    { 55, 28495 },
+    { 70, 43185 }
+};
+
 enum BotCommonValues
 {
 // DREADLORD

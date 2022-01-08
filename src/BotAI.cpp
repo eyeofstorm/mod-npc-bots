@@ -1313,3 +1313,172 @@ void BotAI::OnBotOwnerMoveWorldport(Player* owner)
             owner->GetMap()->GetMapName());
     }
 }
+
+void BotAI::OnBotOwnerMoveTeleport(Player* owner)
+{
+    Map* botCurMap = m_bot->FindMap();
+    Map* ownerCurMap = owner->FindMap();
+    
+    if ((m_bot->IsInWorld() || (botCurMap && botCurMap->IsDungeon())) &&
+        m_bot->IsAlive() &&
+        HasBotState(STATE_FOLLOW_INPROGRESS))
+    {
+        if (IsTeleportNear(owner))
+        {
+            // teleport bot to player
+            BotMgr::TeleportBot(
+                        m_bot,
+                        owner->GetMap(),
+                        owner->m_positionX,
+                        owner->m_positionY,
+                        owner->m_positionZ,
+                        owner->m_orientation);
+        }
+    }
+    else
+    {
+        uint32 areaId, zoneId;
+        std::string zoneName = "unknown", areaName = "unknown";
+        LocaleConstant locale = sWorld->GetDefaultDbcLocale();
+
+        owner->GetMap()->GetZoneAndAreaId(
+                              owner->GetPhaseMask(),
+                              zoneId,
+                              areaId,
+                              owner->GetPositionX(),
+                              owner->GetPositionY(),
+                              owner->GetPositionZ());
+
+        if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(zoneId))
+        {
+            zoneName = zone->area_name[locale];
+        }
+
+        if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId))
+        {
+            areaName = area->area_name[locale];
+        }
+
+        LOG_DEBUG(
+            "npcbots",
+            "bot [Name: %s, IsInWorld: %s, Map: %s, IsDungeon: %s, IsAlive: %s, IsFollowed: %s] cannot worldport to player [%s] in [%s, %s, %s].",
+            m_bot->GetName().c_str(),
+            m_bot->IsInWorld() ? "true" : "false",
+            botCurMap ? botCurMap->GetMapName() : "unknown",
+            botCurMap && botCurMap->IsDungeon() ? "true" : "false",
+            m_bot->IsAlive() ? "true" : "false",
+            HasBotState(STATE_FOLLOW_INPROGRESS) ? "true" : "false",
+            owner->GetName().c_str(),
+            areaName.c_str(),
+            zoneName.c_str(),
+            owner->GetMap()->GetMapName());
+    }
+}
+
+bool BotAI::BotFinishTeleport()
+{
+    LOG_DEBUG("npcbots", "bot [%s] finishing teleport...", m_bot->GetName().c_str());
+
+    if (m_bot->IsAlive())
+    {
+        m_bot->CastSpell(m_bot, COSMETIC_TELEPORT_EFFECT, true);
+    }
+
+    Unit* owner = GetBotOwner();
+
+    if (owner)
+    {
+        Map* map = owner->FindMap();
+
+        // update group member online state
+        if (Player const* player = owner->ToPlayer())
+        {
+            if (Group* gr = const_cast<Group*>(player->GetGroup()))
+            {
+                if (gr->IsMember(m_bot->GetGUID()))
+                {
+                    gr->SendUpdate();
+                }
+            }
+        }
+    }
+
+    Unit* leader = GetLeaderForFollower();
+
+    if (leader && leader->IsAlive())
+    {
+        if (HasBotState(STATE_FOLLOW_INPROGRESS))
+        {
+            RemoveBotState(STATE_FOLLOW_INPROGRESS);
+        }
+
+        StartFollow(leader);
+    }
+
+    return true;
+}
+
+void BotAI::BotTeleportHome()
+{
+    ASSERT(m_bot != nullptr);
+
+    uint16 mapid;
+    Position pos;
+
+    GetBotHomePosition(mapid, &pos);
+    Map* map = sMapMgr->CreateBaseMap(mapid);
+
+    LOG_DEBUG(
+        "npcbots",
+        "bot [%s] teleport to home [%s].",
+        m_bot->GetName().c_str(),
+        map ? map->GetMapName() : "known");
+
+    BotMgr::TeleportBot(
+                m_bot,
+                map,
+                pos.m_positionX,
+                pos.m_positionY,
+                pos.m_positionZ,
+                pos.m_orientation);
+}
+
+void BotAI::GetBotHomePosition(uint16& mapid, Position* pos)
+{
+    CreatureData const* data = m_bot->GetCreatureData();
+
+    mapid = data->mapid;
+    pos->Relocate(data->posX, data->posY, data->posZ, data->orientation);
+}
+
+bool BotAI::IsTeleportNear(WorldObject* landPos)
+{
+     Map* landMap = landPos->GetMap();
+       Map* botMap = m_bot->GetMap();
+
+       if (landMap && botMap)
+       {
+           uint32 landMapId = landPos->GetMap()->GetId();
+           uint32 botMapId = m_bot->GetMap()->GetId();
+
+           return landMapId == botMapId;
+       }
+
+       return false;
+}
+
+bool BotAI::IsTeleportFar(WorldObject* landPos)
+{
+    Map* landMap = landPos->GetMap();
+    Map* botMap = m_bot->GetMap();
+
+    if (landMap && botMap)
+    {
+        uint32 landMapId = landPos->GetMap()->GetId();
+        uint32 botMapId = m_bot->GetMap()->GetId();
+
+        return landMapId != botMapId;
+    }
+
+    return false;
+}
