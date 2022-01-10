@@ -30,8 +30,6 @@ static uint16 __rand; //calculated for each bot separately once every updateAI t
 
 BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
 {
-    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotAI::BotAI (this: 0X%016llX, name: %s)", (uint64)this, creature->GetName().c_str());
-
     m_uiFollowerTimer = 2500;
     m_uiWaitTimer = 0;
     m_uiUpdateTimerMedium = 0;
@@ -60,26 +58,16 @@ BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
     }
 
     m_pet = nullptr;
-
-    sBotsRegistry->Register(this);
-
-    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotAI::BotAI (this: 0X%016llX, name: %s)", (uint64)this, creature->GetName().c_str());
 }
 
 BotAI::~BotAI()
 {
-    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotAI::~BotAI (this: 0X%016llX, name: %s)", (uint64)this, m_bot->GetName().c_str());
-
     while (!m_spells.empty())
     {
         BotSpellMap::iterator itr = m_spells.begin();
         delete itr->second;
         m_spells.erase(itr);
     }
-
-    sBotsRegistry->Unregister(this);
-
-    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotAI::~BotAI (this: 0X%016llX, name: %s)", (uint64)this, m_bot->GetName().c_str());
 }
 
 void BotAI::MovementInform(uint32 motionType, uint32 pointId)

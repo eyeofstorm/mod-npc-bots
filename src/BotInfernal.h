@@ -20,9 +20,6 @@ class BotInfernalAI : public BotAI
 public:
     BotInfernalAI(Creature* creature);
 
-public:
-    virtual bool IsPetAI() override { return true; }
-
 protected:
     void UpdateBotAI(uint32 uiDiff) override;
 };

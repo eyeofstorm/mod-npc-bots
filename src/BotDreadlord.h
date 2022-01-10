@@ -46,6 +46,7 @@ enum DreadlordSpecial
     SLEEP_CD                = 6000,
     INFERNAL_COST           = 175 * 5,
     INFERNAL_CD             = 180000,
+    INFERNAL_DURATION       = 60000,
 
     DAMAGE_CD_REDUCTION     = 250,  //ms
     INFERNO_SPAWN_DELAY     = 650,  //ms
@@ -126,7 +127,6 @@ public:
     void UnSummonBotPet() override;
     void OnClassSpellGo(SpellInfo const* spellInfo) override;
     void SummonedCreatureDespawn(Creature* summon) override;
-    virtual bool IsPetAI() override { return false; }
 
 protected:
     void UpdateBotAI(uint32 uiDiff) override;

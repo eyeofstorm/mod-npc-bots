@@ -74,7 +74,6 @@ public:
     bool IsSpellReady(uint32 basespell, uint32 diff) const;
     bool CanBotAttackOnVehicle() const;
     bool CCed(Unit const* target, bool root = false);
-    virtual bool IsPetAI() = 0;
     bool IsTeleportNear(WorldObject* landPos);
     bool IsTeleportFar(WorldObject* landPos);
 

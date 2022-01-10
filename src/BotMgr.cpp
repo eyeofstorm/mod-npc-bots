@@ -637,7 +637,7 @@ BotEntryMap BotsRegistry::GetEntryByOwnerGUID(ObjectGuid ownerGUID)
         {
             BotEntry* entry = itr->second;
 
-            if (entry && !entry->GetBotAI()->IsPetAI())
+            if (entry)
             {
                 Unit* owner = entry->GetBotOwner();
 

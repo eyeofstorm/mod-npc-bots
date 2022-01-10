@@ -14,6 +14,8 @@
 
 BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)
 {
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotDreadlordAI::BotDreadlordAI (this: 0X%016llX, name: %s)", (uint64)this, creature->GetName().c_str());
+
     m_checkAuraTimer = 0;
     m_potionTimer = 0;
 
@@ -35,10 +37,19 @@ BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)
     m_bot->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SNARE, true);
 
     InitCustomeSpells();
+
+    sBotsRegistry->Register(this);
+
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotDreadlordAI::BotDreadlordAI (this: 0X%016llX, name: %s)", (uint64)this, creature->GetName().c_str());
 }
 
 BotDreadlordAI::~BotDreadlordAI()
 {
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotDreadlordAI::~BotDreadlordAI (this: 0X%016llX, name: %s)", (uint64)this, m_bot->GetName().c_str());
+
+    sBotsRegistry->Unregister(this);
+
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotDreadlordAI::~BotDreadlordAI (this: 0X%016llX, name: %s)", (uint64)this, m_bot->GetName().c_str());
 }
 
 void BotDreadlordAI::InitCustomeSpells()
@@ -503,7 +514,6 @@ void BotDreadlordAI::SummonBotPet(const Position *pos)
         BotMgr::SetBotLevel(infernal, master->getLevel(), false);
 
         infernalAI->SetBotOwner(dreadlord);
-        sBotsRegistry->Update(infernalAI, MODE_UPDATE_HIRE);
         infernalAI->StartFollow(dreadlord);
 
         // damage, stun
@@ -526,7 +536,7 @@ void BotDreadlordAI::SummonBotPet(const Position *pos)
         m_pet = infernal;
 
         DelayedUnsummonInfernoEvent* unsummonInfernoEvent = new DelayedUnsummonInfernoEvent(m_bot);
-        Events.AddEvent(unsummonInfernoEvent, Events.CalculateTime(INFERNAL_CD - 2300));
+        Events.AddEvent(unsummonInfernoEvent, Events.CalculateTime(INFERNAL_DURATION));
     }
     else
     {
