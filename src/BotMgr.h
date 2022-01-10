@@ -9,6 +9,8 @@
 
 #include "BotCommon.h"
 
+#include <mutex>
+
 class BotEntry;
 class BotMgr;
 class BotsRegistry;
@@ -17,14 +19,6 @@ class Creature;
 class Map;
 class Player;
 class Unit;
-
-enum eBotRegistryUpdateMode
-{
-    MODE_CREATE         = 0x0000,
-    MODE_UPDATE_HIRE    = 0x0001,
-    MODE_UPDATE_DISMISS = 0x0002,
-    MODE_DELETE         = 0x0004
-};
 
 typedef std::map<ObjectGuid, BotEntry*> BotEntryMap;
 
@@ -65,8 +59,7 @@ class BotsRegistry
 protected:
     explicit BotsRegistry()
     {
-        m_freeBotRegistry.clear();
-        m_hiredBotRegistry.clear();
+        m_botRegistry.clear();
     }
 
 public:
@@ -78,19 +71,29 @@ public:
 
 public:
     void Register(BotAI* ai);
-    void Update(BotAI* ai, uint16 mode);
     void Unregister(BotAI* ai);
     BotEntry* GetEntry(Creature const* bot);
     BotEntryMap GetEntryByOwnerGUID(ObjectGuid ownerGUID);
     Creature* FindFirstBot(uint32 creatureTemplateEntry);
 
 public:
-    void LogHiredBotRegistryEntries();
-    void LogFreeBotRegistryEntries();
+    void LogBotRegistryEntries();
 
 private:
-    BotEntryMap m_freeBotRegistry;
-    BotEntryMap m_hiredBotRegistry;
+    void lock()
+    {
+        m_lock.lock();
+    }
+
+    void unlock()
+    {
+        m_lock.unlock();
+    }
+
+private:
+    std::mutex m_lock;
+
+    BotEntryMap m_botRegistry;
 };
 
 #define sBotsRegistry BotsRegistry::instance()

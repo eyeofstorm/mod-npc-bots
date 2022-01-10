@@ -17,6 +17,197 @@
 #include "Player.h"
 #include "Unit.h"
 
+void BotsRegistry::Register(BotAI* ai)
+{
+    ASSERT(ai != nullptr);
+    ASSERT(ai->GetBot() != nullptr);
+
+    Creature* bot = ai->GetBot();
+    ObjectGuid botGUID = bot->GetGUID();
+
+    lock();
+
+    BotEntryMap::iterator itr = m_botRegistry.find(botGUID);
+
+    if (itr != m_botRegistry.end())
+    {
+        m_botRegistry.erase(itr);
+        delete itr->second;
+    }
+
+    LOG_WARN(
+        "npcbots",
+        "register bot [GUID: %u AI: 0X%016llX  %s] to bot registry...",
+        bot->GetGUID().GetCounter(),
+        (uint64)ai,
+        bot->GetName().c_str());
+
+    m_botRegistry[botGUID] = new BotEntry(ai);
+
+    unlock();
+
+    sBotsRegistry->LogBotRegistryEntries();
+}
+
+void BotsRegistry::Unregister(BotAI* ai)
+{
+    ASSERT(ai != nullptr);
+    ASSERT(ai->GetBot() != nullptr);
+
+    Creature* bot = ai->GetBot();
+    ObjectGuid botGUID = bot->GetGUID();
+
+    lock();
+
+    BotEntryMap::iterator itr = m_botRegistry.find(botGUID);
+
+    if (itr != m_botRegistry.end())
+    {
+        BotEntry* entry = itr->second;
+
+        if (entry->GetBot()->GetGUID() == botGUID && entry->GetBotAI() != ai)
+        {
+            LOG_WARN(
+                "npcbots",
+                "bot [GUID: %u AI: 0X%016llX  %s] skip unregister from bot registry.",
+                bot->GetGUID().GetCounter(),
+                (uint64)ai,
+                bot->GetName().c_str());
+        }
+        else
+        {
+            LOG_WARN(
+                "npcbots",
+                "bot [GUID: %u AI: 0X%016llX  %s] unregister from bot registry.",
+                bot->GetGUID().GetCounter(),
+                (uint64)ai,
+                bot->GetName().c_str());
+
+            m_botRegistry.erase(botGUID);
+            delete entry;
+        }
+    }
+
+    unlock();
+
+    sBotsRegistry->LogBotRegistryEntries();
+}
+
+BotEntry* BotsRegistry::GetEntry(Creature const* bot)
+{
+    ASSERT(bot != nullptr);
+
+    lock();
+
+    BotEntryMap::iterator itr = m_botRegistry.find(bot->GetGUID());
+    BotEntry* entry = nullptr;
+
+    if (itr != m_botRegistry.end())
+    {
+        entry = itr->second;
+    }
+
+    unlock();
+
+    return entry;
+}
+
+BotEntryMap BotsRegistry::GetEntryByOwnerGUID(ObjectGuid ownerGUID)
+{
+    BotEntryMap botsMap;
+
+    lock();
+
+    if (!m_botRegistry.empty())
+    {
+        for (BotEntryMap::iterator itr = m_botRegistry.begin(); itr != m_botRegistry.end(); ++itr)
+        {
+            BotEntry* entry = itr->second;
+
+            if (entry)
+            {
+                Unit* owner = entry->GetBotOwner();
+
+                if (owner && owner->GetGUID() == ownerGUID)
+                {
+                    botsMap[entry->GetBot()->GetGUID()] = entry;
+                }
+            }
+        }
+    }
+
+    unlock();
+
+    return botsMap;
+}
+
+Creature* BotsRegistry::FindFirstBot(uint32 creatureTemplateEntry)
+{
+    lock();
+
+    if (!m_botRegistry.empty())
+    {
+        for (BotEntryMap::iterator itr = m_botRegistry.begin(); itr != m_botRegistry.end(); ++itr)
+        {
+            BotEntry* entry = itr->second;
+
+            if (entry)
+            {
+                if (entry->GetBot()->GetCreatureTemplate()->Entry == creatureTemplateEntry)
+                {
+                    unlock();
+
+                    return entry->GetBot();
+                }
+            }
+        }
+    }
+
+    unlock();
+
+    return nullptr;
+}
+
+void BotsRegistry::LogBotRegistryEntries()
+{
+    lock();
+
+    if (!m_botRegistry.empty())
+    {
+        LOG_WARN("npcbots", "bot registry entries: %lu entries", m_botRegistry.size());
+
+        for (BotEntryMap::iterator itr = m_botRegistry.begin(); itr != m_botRegistry.end(); ++itr)
+        {
+            BotEntry* entry = itr->second;
+
+            if (entry)
+            {
+                std::string botName = entry->GetBot()? entry->GetBot()->GetName() : "null";
+                std::string botOwnerName = entry->GetBotOwner() ? entry->GetBotOwner()->GetName() : "null";
+
+                LOG_WARN(
+                    "npcbots",
+                    "    +-- GUID Low: %u, Entry: { name: \"%s\", owner: \"%s\", ai: 0X%016llX }",
+                    itr->first.GetCounter(),
+                    botName.c_str(),
+                    botOwnerName.c_str(),
+                    entry->GetBotAI() ? (uint64)entry->GetBotAI() : 0);
+            }
+            else
+            {
+                LOG_ERROR("npcbots","    +-- GUID Low: %u, Entry: null", itr->first.GetCounter());
+            }
+        }
+    }
+    else
+    {
+        LOG_WARN("npcbots", "bot registry entries:");
+        LOG_WARN("npcbots", "    +-- (empty)");
+    }
+
+    unlock();
+}
+
 void BotMgr::HireBot(Player* owner, Creature* bot)
 {
     ASSERT(owner != nullptr);
@@ -38,13 +229,14 @@ void BotMgr::HireBot(Player* owner, Creature* bot)
     if (BotAI* ai = (BotAI*)bot->AI())
     {
         ai->SetBotOwner(owner);
-        sBotsRegistry->Update(ai, MODE_UPDATE_HIRE);
         ai->StartFollow(owner);
     }
     else
     {
         LOG_ERROR("npcbots", "AI of bot [%s] not found.", bot->GetName().c_str());
     }
+
+    sBotsRegistry->LogBotRegistryEntries();
 
     LOG_DEBUG("npcbots", "[%s] end hire the bot [%s].", owner->GetName().c_str(), bot->GetName().c_str());
 }
@@ -81,6 +273,8 @@ bool BotMgr::DismissBot(Creature* bot)
         }
     }
 
+    sBotsRegistry->LogBotRegistryEntries();
+
     LOG_DEBUG("npcbots", "end dismiss bot [%s].", bot->GetName().c_str());
 
     return true;
@@ -95,8 +289,6 @@ void BotMgr::CleanupsBeforeBotDismiss(Creature* bot)
         ai->SetBotOwner(nullptr);
         ai->UnSummonBotPet();
         ai->SetFollowComplete();
-
-        sBotsRegistry->Update(ai, MODE_UPDATE_DISMISS);
     }
 
     if (bot->GetVehicle())
@@ -349,414 +541,4 @@ bool BotMgr::RestrictBots(Creature const* bot, bool add)
     }
 
     return false;
-}
-
-void BotsRegistry::Register(BotAI* ai)
-{
-    ASSERT(ai != nullptr);
-    ASSERT(ai->GetBot() != nullptr);
-
-    Creature* bot = ai->GetBot();
-    ObjectGuid botGUID = bot->GetGUID();
-
-    if (!ai->GetBotOwner())
-    {
-        BotEntryMap::iterator itr = m_hiredBotRegistry.find(botGUID);
-
-        if (itr != m_hiredBotRegistry.end())
-        {
-            m_hiredBotRegistry.erase(itr);
-            delete itr->second;
-        }
-
-        itr = m_freeBotRegistry.find(botGUID);
-
-        if (itr != m_freeBotRegistry.end())
-        {
-            m_freeBotRegistry.erase(itr);
-            delete itr->second;
-
-            LOG_WARN(
-                "npcbots",
-                "bot [GUID: %u AI: 0X%016llX  %s] register to free bot registry...",
-                bot->GetGUID().GetCounter(),
-                (uint64)ai,
-                bot->GetName().c_str());
-
-            m_freeBotRegistry[botGUID] = new BotEntry(ai);
-        }
-        else
-        {
-            LOG_WARN(
-                "npcbots",
-                "bot [GUID: %u AI: 0X%016llX  %s] register to free bot registry...",
-                bot->GetGUID().GetCounter(),
-                (uint64)ai,
-                bot->GetName().c_str());
-
-            m_freeBotRegistry[botGUID] = new BotEntry(ai);
-        }
-    }
-    else
-    {
-        BotEntryMap::iterator itr = m_freeBotRegistry.find(botGUID);
-
-        if (itr != m_freeBotRegistry.end())
-        {
-            m_freeBotRegistry.erase(itr);
-            delete itr->second;
-        }
-
-        itr = m_hiredBotRegistry.find(botGUID);
-
-        if (itr != m_hiredBotRegistry.end())
-        {
-            m_hiredBotRegistry.erase(itr);
-            delete itr->second;
-
-            LOG_WARN(
-                "npcbots",
-                "bot [GUID: %u AI: 0X%016llX  %s] register to hired bot registry...",
-                bot->GetGUID().GetCounter(),
-                (uint64)ai,
-                bot->GetName().c_str());
-
-            m_hiredBotRegistry[botGUID] = new BotEntry(ai);
-        }
-        else
-        {
-            LOG_WARN(
-                "npcbots",
-                "bot [GUID: %u AI: 0X%016llX  %s] register to hired bot registry...",
-                bot->GetGUID().GetCounter(),
-                (uint64)ai,
-                bot->GetName().c_str());
-
-            m_hiredBotRegistry[botGUID] = new BotEntry(ai);
-        }
-    }
-
-    sBotsRegistry->LogFreeBotRegistryEntries();
-    sBotsRegistry->LogHiredBotRegistryEntries();
-}
-
-void BotsRegistry::Update(BotAI* ai, uint16 mode)
-{
-    ASSERT(ai != nullptr);
-    ASSERT(ai->GetBot() != nullptr);
-
-    Creature* bot = ai->GetBot();
-    ObjectGuid botGUID = bot->GetGUID();
-
-    if (MODE_UPDATE_HIRE == mode)
-    {
-        BotEntryMap::iterator itr = m_freeBotRegistry.find(botGUID);
-
-        if (itr != m_freeBotRegistry.end())
-        {
-            BotEntry* freeBot = itr->second;
-
-            if (freeBot->GetBotAI() == ai)
-            {
-                m_freeBotRegistry.erase(botGUID);
-                delete freeBot;
-            }
-        }
-
-        itr = m_hiredBotRegistry.find(botGUID);
-
-        if (itr != m_hiredBotRegistry.end())
-        {
-            BotEntry* hiredBot = itr->second;
-
-            if (hiredBot->GetBotAI() == ai)
-            {
-                m_hiredBotRegistry.erase(botGUID);
-                delete hiredBot;
-
-                m_hiredBotRegistry[botGUID] = new BotEntry(ai);
-            }
-        }
-        else
-        {
-            m_hiredBotRegistry[botGUID] = new BotEntry(ai);
-        }
-    }
-    else if (MODE_UPDATE_DISMISS == mode)
-    {
-        BotEntryMap::iterator itr = m_hiredBotRegistry.find(botGUID);
-
-        if (itr != m_hiredBotRegistry.end())
-        {
-            BotEntry* hiredBot = itr->second;
-
-            if (hiredBot->GetBotAI() == ai)
-            {
-                m_hiredBotRegistry.erase(botGUID);
-                delete hiredBot;
-            }
-        }
-
-        itr = m_freeBotRegistry.find(botGUID);
-
-        if (itr != m_freeBotRegistry.end())
-        {
-            BotEntry* freeBot = itr->second;
-
-            if (freeBot->GetBotAI() == ai)
-            {
-                m_freeBotRegistry.erase(botGUID);
-                delete freeBot;
-
-                m_freeBotRegistry[botGUID] = new BotEntry(ai);
-            }
-        }
-        else
-        {
-            m_freeBotRegistry[botGUID] = new BotEntry(ai);
-        }
-    }
-
-    sBotsRegistry->LogFreeBotRegistryEntries();
-    sBotsRegistry->LogHiredBotRegistryEntries();
-}
-
-void BotsRegistry::Unregister(BotAI* ai)
-{
-    ASSERT(ai != nullptr);
-    ASSERT(ai->GetBot() != nullptr);
-
-    Creature* bot = ai->GetBot();
-    ObjectGuid botGUID = bot->GetGUID();
-
-    BotEntryMap::iterator itr = m_freeBotRegistry.find(botGUID);
-
-    if (itr != m_freeBotRegistry.end())
-    {
-        BotEntry* freeBot = itr->second;
-
-        if (freeBot->GetBot()->GetGUID() == botGUID && freeBot->GetBotAI() != ai)
-        {
-            LOG_WARN(
-                "npcbots",
-                "bot [GUID: %u AI: 0X%016llX  %s] skip unregister from free bot registry.",
-                bot->GetGUID().GetCounter(),
-                (uint64)ai,
-                bot->GetName().c_str());
-        }
-        else
-        {
-            LOG_WARN(
-                "npcbots",
-                "bot [GUID: %u AI: 0X%016llX  %s] unregister from free bot registry.",
-                bot->GetGUID().GetCounter(),
-                (uint64)ai,
-                bot->GetName().c_str());
-
-            m_freeBotRegistry.erase(botGUID);
-            delete freeBot;
-        }
-    }
-
-    itr = m_hiredBotRegistry.find(botGUID);
-
-    if (itr != m_hiredBotRegistry.end())
-    {
-        BotEntry* hiredBot = itr->second;
-
-        if (hiredBot->GetBot()->GetGUID() == botGUID && hiredBot->GetBotAI() != ai)
-        {
-            LOG_WARN(
-                "npcbots",
-                "bot [GUID: %u AI: 0X%016llX  %s] skip unregister from hired bot registry.",
-                bot->GetGUID().GetCounter(),
-                (uint64)ai,
-                bot->GetName().c_str());
-        }
-        else
-        {
-            LOG_WARN(
-                "npcbots",
-                "bot [GUID: %u AI: 0X%016llX  %s] unregister from hired bot registry.",
-                bot->GetGUID().GetCounter(),
-                (uint64)ai,
-                bot->GetName().c_str());
-
-            m_hiredBotRegistry.erase(botGUID);
-            delete hiredBot;
-        }
-    }
-
-    sBotsRegistry->LogFreeBotRegistryEntries();
-    sBotsRegistry->LogHiredBotRegistryEntries();
-}
-
-BotEntry* BotsRegistry::GetEntry(Creature const* bot)
-{
-    ASSERT(bot != nullptr);
-
-    BotAI* botAI = (BotAI *)bot->AI();
-
-    ObjectGuid botGUID = bot->GetGUID();
-
-    if (!botAI)
-    {
-        BotEntryMap::iterator itr = m_freeBotRegistry.find(botGUID);
-
-        if (itr != m_freeBotRegistry.end())
-        {
-            return itr->second;
-        }
-        else
-        {
-            return nullptr;
-        }
-    }
-    else
-    {
-        BotEntryMap::iterator itr = m_hiredBotRegistry.find(botGUID);
-
-        if (itr != m_hiredBotRegistry.end())
-        {
-            return itr->second;
-        }
-        else
-        {
-            return nullptr;
-        }
-    }
-}
-
-BotEntryMap BotsRegistry::GetEntryByOwnerGUID(ObjectGuid ownerGUID)
-{
-    BotEntryMap botsMap;
-
-    if (!m_hiredBotRegistry.empty())
-    {
-        for (BotEntryMap::iterator itr = m_hiredBotRegistry.begin(); itr != m_hiredBotRegistry.end(); ++itr)
-        {
-            BotEntry* entry = itr->second;
-
-            if (entry)
-            {
-                Unit* owner = entry->GetBotOwner();
-
-                if (owner && owner->GetGUID() == ownerGUID)
-                {
-                    botsMap[entry->GetBot()->GetGUID()] = entry;
-                }
-            }
-        }
-    }
-
-    return botsMap;
-}
-
-Creature* BotsRegistry::FindFirstBot(uint32 creatureTemplateEntry)
-{
-    if (!m_freeBotRegistry.empty())
-    {
-        for (BotEntryMap::iterator itr = m_freeBotRegistry.begin(); itr != m_freeBotRegistry.end(); ++itr)
-        {
-            BotEntry* entry = itr->second;
-
-            if (entry)
-            {
-                if (entry->GetBot()->GetCreatureTemplate()->Entry == creatureTemplateEntry)
-                {
-                    return entry->GetBot();
-                }
-            }
-        }
-    }
-
-    if (!m_hiredBotRegistry.empty())
-    {
-        for (BotEntryMap::iterator itr = m_hiredBotRegistry.begin(); itr != m_hiredBotRegistry.end(); ++itr)
-        {
-            BotEntry* entry = itr->second;
-
-            if (entry)
-            {
-                if (entry->GetBot()->GetCreatureTemplate()->Entry == creatureTemplateEntry)
-                {
-                    return entry->GetBot();
-                }
-            }
-        }
-    }
-
-    return nullptr;
-}
-
-void BotsRegistry::LogHiredBotRegistryEntries()
-{
-    if (!m_hiredBotRegistry.empty())
-    {
-        LOG_WARN("npcbots", "hired bot registry entries: %lu entries", m_hiredBotRegistry.size());
-
-        for (BotEntryMap::iterator itr = m_hiredBotRegistry.begin(); itr != m_hiredBotRegistry.end(); ++itr)
-        {
-            BotEntry* entry = itr->second;
-
-            if (entry)
-            {
-                std::string botName = entry->GetBot()? entry->GetBot()->GetName() : "null";
-                std::string botOwnerName = entry->GetBotOwner() ? entry->GetBotOwner()->GetName() : "null";
-
-                LOG_WARN(
-                    "npcbots",
-                    "    +-- GUID Low: %u, Entry: { name: \"%s\", owner: \"%s\", ai: 0X%016llX }",
-                    itr->first.GetCounter(),
-                    botName.c_str(),
-                    botOwnerName.c_str(),
-                    entry->GetBotAI() ? (uint64)entry->GetBotAI() : 0);
-            }
-            else
-            {
-                LOG_ERROR("npcbots","    +-- GUID Low: %u, Entry: null", itr->first.GetCounter());
-            }
-        }
-    }
-    else
-    {
-        LOG_WARN("npcbots", "hired bot registry entries:");
-        LOG_WARN("npcbots", "    +-- (empty)");
-    }
-}
-
-void BotsRegistry::LogFreeBotRegistryEntries()
-{
-    if (!m_freeBotRegistry.empty())
-    {
-        LOG_WARN("npcbots", "free  bot registry entries: %lu entries", m_freeBotRegistry.size());
-
-        for (BotEntryMap::iterator itr = m_freeBotRegistry.begin(); itr != m_freeBotRegistry.end(); ++itr)
-        {
-            BotEntry* entry = itr->second;
-
-            if (entry)
-            {
-                std::string botName = entry->GetBot()? entry->GetBot()->GetName() : "null";
-                std::string botOwnerName = entry->GetBotOwner() ? entry->GetBotOwner()->GetName() : "null";
-
-                LOG_WARN(
-                    "npcbots",
-                    "    +-- GUID Low: %u, Entry: { name: \"%s\", owner: \"%s\", ai: 0X%016llX }",
-                    itr->first.GetCounter(),
-                    botName.c_str(),
-                    botOwnerName.c_str(),
-                    entry->GetBotAI() ? (uint64)entry->GetBotAI() : 0);
-            }
-            else
-            {
-                LOG_ERROR("npcbots","    +-- GUID Low: %u, Entry: null", itr->first.GetCounter());
-            }
-        }
-    }
-    else
-    {
-        LOG_WARN("npcbots", "free  bot registry entries:");
-        LOG_WARN("npcbots", "    +-- (empty)");
-    }
 }
