@@ -302,11 +302,12 @@ bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, 
     // call function AddToMap below on bot will lead to create a new BotAI instance for it.
     // so wo need save some old AI's state before call AddToMap function.
     Unit* leader = oldAI->GetLeaderForFollower();
-    
-    // add bot to new map
-    bot->GetMap()->AddToMap(bot);
+    bool isFreeBot = oldAI->IAmFree();
 
-    if (oldAI->IAmFree())
+    // add bot to new map
+    newMap->AddToMap(bot);
+
+    if (isFreeBot)
     {
         return true;
     }
@@ -316,7 +317,7 @@ bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, 
 
     LOG_INFO(
          "npcbots",
-         "add bot [%s] back to map [%s]. old AI(0X%016llX), new AI(0X%016llX))",
+         "add bot [%s] back to map [%s]. old AI(0X%016llX), new AI(0X%016llX)",
          bot->GetName().c_str(),
          newMap->GetMapName(),
          (uint64)oldAI,
@@ -329,7 +330,7 @@ bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, 
     }
 
     TeleportFinishEvent* finishEvent = new TeleportFinishEvent(newAI);
-    newAI->GetEvents()->AddEvent(finishEvent, newAI->GetEvents()->CalculateTime(urand(5000, 8000)));
+    newAI->GetEvents()->AddEvent(finishEvent, newAI->GetEvents()->CalculateTime(urand(500, 800)));
 }
 
 bool BotMgr::RestrictBots(Creature const* bot, bool add)

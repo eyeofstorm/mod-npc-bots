@@ -340,11 +340,11 @@ void BotDreadlordAI::DoDreadlordAttackIfReady(uint32 uiDiff)
         bool cast = false;
 
         std::list<Unit*> targets;
-        GetNearbyTargetsInConeList(targets, 15); //real radius is 20
+        GetNearbyTargetsInConeList(targets, 5);
 
-        if (targets.size() > 3)
+        if (targets.size() >= 3)
         {
-            if (target && m_bot->HasInArc(float(M_PI) / 2, target) && m_bot->GetDistance(target) < 15 &&
+            if (target && m_bot->HasInArc(float(M_PI) / 2, target) && m_bot->GetDistance(target) <= 10 &&
                 (GetManaPCT(me) > 60 || m_bot->getAttackers().empty() || GetHealthPCT(me) < 50 || target->HasAura(SLEEP_1)))
             {
                 cast = true;

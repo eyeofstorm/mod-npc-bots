@@ -54,7 +54,6 @@ public:
 public:
     void OnCreatureFinishedUpdate(uint32 uiDiff);
     void OnBotOwnerMoveWorldport(Player* owner);
-    bool OnBeforeOwnerTeleport(uint32 mapid, float x, float y, float z, float orientation, uint32 options, Unit* target);
     void OnBotOwnerMoveTeleport(Player* owner);
     void OnBotSpellGo(Spell const* spell, bool ok = true);
     virtual void OnClassSpellGo(SpellInfo const* /*spell*/) { }

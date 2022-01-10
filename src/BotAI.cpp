@@ -234,7 +234,7 @@ void BotAI::JustDied(Unit* pKiller)
         }
     }
 
-    m_bot->DespawnOrUnsummon();
+//    m_bot->DespawnOrUnsummon();
 }
 
 void BotAI::JustRespawned()
@@ -1242,21 +1242,6 @@ void BotAI::BotStopMovement()
     m_bot->DisableSpline();
 }
 
-bool BotAI::OnBeforeOwnerTeleport(
-                    uint32 mapid, float x, float y, float z, float orientation,
-                    uint32 options,
-                    Unit* target)
-{
-    LOG_DEBUG(
-          "npcbots",
-          "☆☆☆ bot [%s] despawn due to owner move worldport/teleport...",
-          m_bot->GetName().c_str());
-
-    m_bot->DespawnOrUnsummon();
-
-    return true;
-}
-
 void BotAI::OnBotOwnerMoveWorldport(Player* owner)
 {
     Map* botCurMap = m_bot->FindMap();
@@ -1316,62 +1301,75 @@ void BotAI::OnBotOwnerMoveWorldport(Player* owner)
 
 void BotAI::OnBotOwnerMoveTeleport(Player* owner)
 {
-    Map* botCurMap = m_bot->FindMap();
-    Map* ownerCurMap = owner->FindMap();
-    
-    if ((m_bot->IsInWorld() || (botCurMap && botCurMap->IsDungeon())) &&
+//    Map* botCurMap = m_bot->FindMap();
+//
+//    if ((m_bot->IsInWorld() || (botCurMap && botCurMap->IsDungeon())) &&
+//        m_bot->IsAlive() &&
+//        HasBotState(STATE_FOLLOW_INPROGRESS))
+//    {
+//        if (IsTeleportNear(owner))
+//        {
+//            // teleport bot to player
+//            BotMgr::TeleportBot(
+//                        m_bot,
+//                        owner->GetMap(),
+//                        owner->m_positionX,
+//                        owner->m_positionY,
+//                        owner->m_positionZ,
+//                        owner->m_orientation);
+//        }
+//    }
+//    else
+//    {
+//        uint32 areaId, zoneId;
+//        std::string zoneName = "unknown", areaName = "unknown";
+//        LocaleConstant locale = sWorld->GetDefaultDbcLocale();
+//
+//        owner->GetMap()->GetZoneAndAreaId(
+//                              owner->GetPhaseMask(),
+//                              zoneId,
+//                              areaId,
+//                              owner->GetPositionX(),
+//                              owner->GetPositionY(),
+//                              owner->GetPositionZ());
+//
+//        if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(zoneId))
+//        {
+//            zoneName = zone->area_name[locale];
+//        }
+//
+//        if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId))
+//        {
+//            areaName = area->area_name[locale];
+//        }
+//
+//        LOG_DEBUG(
+//            "npcbots",
+//            "bot [Name: %s, IsInWorld: %s, Map: %s, IsDungeon: %s, IsAlive: %s, IsFollowed: %s] cannot teleport to player [%s] in [%s, %s, %s].",
+//            m_bot->GetName().c_str(),
+//            m_bot->IsInWorld() ? "true" : "false",
+//            botCurMap ? botCurMap->GetMapName() : "unknown",
+//            botCurMap && botCurMap->IsDungeon() ? "true" : "false",
+//            m_bot->IsAlive() ? "true" : "false",
+//            HasBotState(STATE_FOLLOW_INPROGRESS) ? "true" : "false",
+//            owner->GetName().c_str(),
+//            areaName.c_str(),
+//            zoneName.c_str(),
+//            owner->GetMap()->GetMapName());
+//    }
+
+    if (m_bot->IsInWorld() &&
         m_bot->IsAlive() &&
         HasBotState(STATE_FOLLOW_INPROGRESS))
     {
         if (IsTeleportNear(owner))
         {
-            // teleport bot to player
-            BotMgr::TeleportBot(
-                        m_bot,
-                        owner->GetMap(),
-                        owner->m_positionX,
-                        owner->m_positionY,
-                        owner->m_positionZ,
-                        owner->m_orientation);
+            m_bot->NearTeleportTo(
+                        owner->GetPositionX(),
+                        owner->GetPositionY(),
+                        owner->GetPositionZ(),
+                        owner->GetOrientation());
         }
-    }
-    else
-    {
-        uint32 areaId, zoneId;
-        std::string zoneName = "unknown", areaName = "unknown";
-        LocaleConstant locale = sWorld->GetDefaultDbcLocale();
-
-        owner->GetMap()->GetZoneAndAreaId(
-                              owner->GetPhaseMask(),
-                              zoneId,
-                              areaId,
-                              owner->GetPositionX(),
-                              owner->GetPositionY(),
-                              owner->GetPositionZ());
-
-        if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(zoneId))
-        {
-            zoneName = zone->area_name[locale];
-        }
-
-        if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId))
-        {
-            areaName = area->area_name[locale];
-        }
-
-        LOG_DEBUG(
-            "npcbots",
-            "bot [Name: %s, IsInWorld: %s, Map: %s, IsDungeon: %s, IsAlive: %s, IsFollowed: %s] cannot worldport to player [%s] in [%s, %s, %s].",
-            m_bot->GetName().c_str(),
-            m_bot->IsInWorld() ? "true" : "false",
-            botCurMap ? botCurMap->GetMapName() : "unknown",
-            botCurMap && botCurMap->IsDungeon() ? "true" : "false",
-            m_bot->IsAlive() ? "true" : "false",
-            HasBotState(STATE_FOLLOW_INPROGRESS) ? "true" : "false",
-            owner->GetName().c_str(),
-            areaName.c_str(),
-            zoneName.c_str(),
-            owner->GetMap()->GetMapName());
     }
 }
 
@@ -1412,7 +1410,7 @@ bool BotAI::BotFinishTeleport()
             RemoveBotState(STATE_FOLLOW_INPROGRESS);
         }
 
-        StartFollow(leader);
+        StartFollow(leader, owner ? owner->GetFaction() : 0);
     }
 
     return true;

@@ -75,10 +75,19 @@ enum BotCommonValues
     COSMETIC_TELEPORT_EFFECT            = 52096     //visual instant cast omni
 };
 
+#define BOT_ENTRY_BASE 9000000
+
+enum BotTypes
+{
+// DREADLORD
+    BOT_DREADLORD                       = (BOT_ENTRY_BASE + 1),
+    BOT_INFERNAL                        = (BOT_ENTRY_BASE + 2)
+};
+
 enum BotPetTypes
 {
 // DREADLORD
-    BOT_PET_INFERNAL                    = 9000001,
+    BOT_PET_INFERNAL                    = BOT_INFERNAL
 };
 
 #define FROM_ARRAY(arr) arr, arr + sizeof(arr) / sizeof(arr[0])

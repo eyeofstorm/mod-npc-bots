@@ -52,7 +52,7 @@ bool BotCommandsScript::HandleBotSpawnCommand(ChatHandler* handler, uint32 entry
     }
 
     // check if this is a hireable bot.
-    if (creatureTemplate->Entry < 9000000)
+    if (creatureTemplate->Entry <= BOT_ENTRY_BASE)
     {
         handler->PSendSysMessage("creature %u is not a bot!", entry);
         handler->SetSentErrorMessage(true);
@@ -167,7 +167,7 @@ bool BotCommandsScript::HandleBotHireCommand(ChatHandler* handler)
         return false;
     }
 
-    if (bot->GetCreatureTemplate()->Entry < 9000000)
+    if (bot->GetCreatureTemplate()->Entry <= BOT_ENTRY_BASE)
     {
         handler->SendSysMessage("the creature that you seleted is not a hireable bot.");
         handler->SetSentErrorMessage(true);
@@ -207,7 +207,7 @@ bool BotCommandsScript::HandleBotDismissCommand(ChatHandler* handler)
         return false;
     }
 
-    if (bot->GetCreatureTemplate()->Entry < 9000000)
+    if (bot->GetCreatureTemplate()->Entry <= BOT_ENTRY_BASE)
     {
         handler->SendSysMessage("the creature that you seleted is not a bot.");
         handler->SetSentErrorMessage(true);
@@ -247,7 +247,7 @@ bool BotCommandsScript::HandleBotMoveCommand(ChatHandler* handler, uint32 creatu
     }
 
     // check if this is a hireable bot.
-    if (creatureTemplate->Entry < 9000000)
+    if (creatureTemplate->Entry <= BOT_ENTRY_BASE)
     {
         handler->PSendSysMessage("creature(entry: %u) is not a bot!", creatureTemplateEntry);
         handler->SetSentErrorMessage(true);
@@ -328,36 +328,6 @@ bool BotCommandsScript::HandleBotMoveCommand(ChatHandler* handler, uint32 creatu
     handler->SetSentErrorMessage(true);
 
     return false;
-}
-
-bool UnitHookScript::OnBeforePlayerTeleport(
-                            Player* player,
-                            uint32 mapid, float x, float y, float z, float orientation,
-                            uint32 options,
-                            Unit* target)
-{
-    if (BotMgr::GetBotsCount(player) > 0)
-    {
-        BotEntryMap botsMap = sBotsRegistry->GetEntryByOwnerGUID(player->GetGUID());
-
-        if (!botsMap.empty())
-        {
-            for (BotEntryMap::iterator itr = botsMap.begin(); itr != botsMap.end(); ++itr)
-            {
-                BotEntry* entry = itr->second;
-
-                if (entry)
-                {
-                    if (BotAI* ai = entry->GetBotAI())
-                    {
-                        ai->OnBeforeOwnerTeleport(mapid, x, y, z, orientation, options, target);
-                    }
-                }
-            }
-        }
-    }
-
-    return true;
 }
 
 void PlayerHookScript::OnLogin(Player* player)
@@ -463,7 +433,7 @@ void CreatureHookScript::OnAllCreatureUpdate(Creature* creature, uint32 diff)
 {
     if (creature)
     {
-        if (creature->GetEntry() >= 9000000) 
+        if (creature->GetEntry() > BOT_ENTRY_BASE)
         {
             BotAI* ai = const_cast<BotAI*>(BotMgr::GetBotAI(creature));
 
@@ -508,7 +478,7 @@ void SpellHookScript::OnSpellGo(Unit const* caster, Spell const* spell, bool ok)
 
         if (creature)
         {
-            if (creature->GetEntry() >= 9000000)
+            if (creature->GetEntry() > BOT_ENTRY_BASE)
             {
                 SpellEntry const* spellEntry = sSpellStore.LookupEntry(spell->GetSpellInfo()->Id);
 

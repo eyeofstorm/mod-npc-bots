@@ -18,7 +18,14 @@ public:
     UnitHookScript() : UnitScript("npc_bots_unit_hook") { }
 
 public:
-    bool OnBeforePlayerTeleport(Player* player, uint32 mapid, float x, float y, float z, float orientation, uint32 options, Unit* target);
+    bool OnBeforePlayerTeleport(
+                Player* player,
+                uint32 mapid, float x, float y, float z, float orientation,
+                uint32 options,
+                Unit* target)
+    {
+        return true;
+    }
 };
 
 class PlayerHookScript : public PlayerScript
