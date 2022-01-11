@@ -249,7 +249,11 @@ bool BotMgr::DismissBot(Creature* bot)
 
     if (bot->IsSummon())
     {
-        return false;
+        LOG_DEBUG("npcbots", "end dismiss bot [%s].", bot->GetName().c_str());
+
+        bot->ToTempSummon()->UnSummon();
+
+        return true;
     }
 
     CleanupsBeforeBotDismiss(bot);
@@ -307,7 +311,7 @@ void BotMgr::CleanupsBeforeBotDismiss(Creature* bot)
     SetBotLevel(bot, bot->GetCreatureTemplate()->minlevel, false);
 }
 
-BotAI const* BotMgr::GetBotAI(Creature const* bot)
+BotAI* BotMgr::GetBotAI(Creature const* bot)
 {
     ASSERT(bot != nullptr);
 
@@ -372,7 +376,7 @@ int BotMgr::GetBotsCount(Unit* owner)
 
 void BotMgr::OnBotSpellGo(Unit const* caster, Spell const* spell, bool ok)
 {
-    BotAI* ai = const_cast<BotAI*>(GetBotAI(caster->ToCreature()));
+    BotAI* ai = GetBotAI(caster->ToCreature());
 
     if (ai)
     {
@@ -380,7 +384,7 @@ void BotMgr::OnBotSpellGo(Unit const* caster, Spell const* spell, bool ok)
     }
 }
 
-void BotMgr::OnPlayerMoveWorldport(Player* player)
+void BotMgr::OnBotOwnerMoveWorldport(Player* player)
 {
     if (!player)
     {
@@ -408,7 +412,7 @@ void BotMgr::OnPlayerMoveWorldport(Player* player)
     }
 }
 
-void BotMgr::OnPlayerMoveTeleport(Player* player)
+void BotMgr::OnBotOwnerMoveTeleport(Player* player)
 {
     if (!player)
     {
@@ -425,11 +429,33 @@ void BotMgr::OnPlayerMoveTeleport(Player* player)
 
             if (entry)
             {
-                BotAI* ai = entry->GetBotAI();
+                Creature* bot = entry->GetBot();
 
-                if (ai)
+                if (bot)
                 {
-                    ai->OnBotOwnerMoveTeleport(player);
+                    if (bot->IsSummon())
+                    {
+                        bot->ToTempSummon()->UnSummon();
+
+                        bot = player->SummonCreature(
+                                                            BOT_DREADLORD,
+                                                            *player,
+                                                            TEMPSUMMON_MANUAL_DESPAWN);
+
+                        if (bot)
+                        {
+                            BotMgr::HireBot(player, bot);
+                        }
+                    }
+                    else
+                    {
+                        BotAI* ai = entry->GetBotAI();
+
+                        if (ai)
+                        {
+                            ai->OnBotOwnerMoveTeleport(player);
+                        }
+                    }
                 }
             }
         }

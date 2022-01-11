@@ -9,17 +9,18 @@
 
 #include "ACoreHookScript.h"
 #include "BotDreadlord.h"
+#include "BotGiver.h"
 #include "BotInfernal.h"
 
-/////////////////////////
+//***********************
 // Add all scripts in one
-/////////////////////////
+//***********************
 
 void AddNpcbotsScripts()
 {
-    /////////////////////
+    //*******************
     // acore hook scripts
-    /////////////////////
+    //*******************
 
     new PlayerHookScript();
     new UnitHookScript();
@@ -28,9 +29,10 @@ void AddNpcbotsScripts()
     new BotCommandsScript();
     new MovementHandlerHookScript();
 
-    /////////////////////
-    // bot ai here.
-    /////////////////////
+    //**************
+    // bot ai script
+    //**************
+    new BotGiver();
     new BotDreadlord();
     new BotInfernal();
 }

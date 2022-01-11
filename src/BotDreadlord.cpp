@@ -7,9 +7,9 @@
 #include "BotDreadlord.h"
 #include "BotEvents.h"
 #include "BotMgr.h"
+#include "Player.h"
 #include "ScriptedGossip.h"
 #include "SpellAuras.h"
-#include "Player.h"
 #include "Unit.h"
 
 BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)
@@ -575,12 +575,7 @@ bool BotDreadlord::OnGossipHello(Player* player, Creature* bot)
 
         BotAI* botAI = (BotAI *)bot->AI();
 
-        if (!botAI->GetBotOwner())
-        {
-            AddGossipItemFor(player, GOSSIP_ICON_BATTLE, "I need your services.", GOSSIP_DREADLORD_SENDER_HIRE, GOSSIP_ACTION_INFO_DEF + 1);
-            AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Nevermind", GOSSIP_DREADLORD_SENDER_EXIT_MENU, GOSSIP_ACTION_INFO_DEF + 2);
-        }
-        else
+        if (botAI->GetBotOwner())
         {
             Unit const* owner = bot->GetOwner();
 
@@ -601,7 +596,6 @@ bool BotDreadlord::OnGossipHello(Player* player, Creature* bot)
 bool BotDreadlord::OnGossipSelect(Player* player, Creature* bot, uint32 sender, uint32 action)
 {
     player->PlayerTalkClass->ClearMenus();
-    bool subMenu = false;
 
     switch (sender)
     {
@@ -613,18 +607,6 @@ bool BotDreadlord::OnGossipSelect(Player* player, Creature* bot, uint32 sender, 
         case GOSSIP_DREADLORD_SENDER_MAIN_MENU: // return to main menu
         {
             return OnGossipHello(player, bot);
-        }
-
-        case GOSSIP_DREADLORD_SENDER_HIRE:
-        {
-            BotAI* botAI = (BotAI *)bot->AI();
-
-            if (!botAI->GetBotOwner())
-            {
-                BotMgr::HireBot(player, bot);
-            }
-
-            break;
         }
 
         case GOSSIP_DREADLORD_SENDER_DISMISS:
@@ -640,10 +622,7 @@ bool BotDreadlord::OnGossipSelect(Player* player, Creature* bot, uint32 sender, 
         }
     }
 
-    if (!subMenu)
-    {
-        player->PlayerTalkClass->SendCloseGossip();
-    }
+    player->PlayerTalkClass->SendCloseGossip();
 
     return true;
 }

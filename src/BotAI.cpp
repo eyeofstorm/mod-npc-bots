@@ -1289,63 +1289,6 @@ void BotAI::OnBotOwnerMoveWorldport(Player* owner)
 
 void BotAI::OnBotOwnerMoveTeleport(Player* owner)
 {
-//    Map* botCurMap = m_bot->FindMap();
-//
-//    if ((m_bot->IsInWorld() || (botCurMap && botCurMap->IsDungeon())) &&
-//        m_bot->IsAlive() &&
-//        HasBotState(STATE_FOLLOW_INPROGRESS))
-//    {
-//        if (IsTeleportNear(owner))
-//        {
-//            // teleport bot to player
-//            BotMgr::TeleportBot(
-//                        m_bot,
-//                        owner->GetMap(),
-//                        owner->m_positionX,
-//                        owner->m_positionY,
-//                        owner->m_positionZ,
-//                        owner->m_orientation);
-//        }
-//    }
-//    else
-//    {
-//        uint32 areaId, zoneId;
-//        std::string zoneName = "unknown", areaName = "unknown";
-//        LocaleConstant locale = sWorld->GetDefaultDbcLocale();
-//
-//        owner->GetMap()->GetZoneAndAreaId(
-//                              owner->GetPhaseMask(),
-//                              zoneId,
-//                              areaId,
-//                              owner->GetPositionX(),
-//                              owner->GetPositionY(),
-//                              owner->GetPositionZ());
-//
-//        if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(zoneId))
-//        {
-//            zoneName = zone->area_name[locale];
-//        }
-//
-//        if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId))
-//        {
-//            areaName = area->area_name[locale];
-//        }
-//
-//        LOG_DEBUG(
-//            "npcbots",
-//            "bot [Name: %s, IsInWorld: %s, Map: %s, IsDungeon: %s, IsAlive: %s, IsFollowed: %s] cannot teleport to player [%s] in [%s, %s, %s].",
-//            m_bot->GetName().c_str(),
-//            m_bot->IsInWorld() ? "true" : "false",
-//            botCurMap ? botCurMap->GetMapName() : "unknown",
-//            botCurMap && botCurMap->IsDungeon() ? "true" : "false",
-//            m_bot->IsAlive() ? "true" : "false",
-//            HasBotState(STATE_FOLLOW_INPROGRESS) ? "true" : "false",
-//            owner->GetName().c_str(),
-//            areaName.c_str(),
-//            zoneName.c_str(),
-//            owner->GetMap()->GetMapName());
-//    }
-
     if (m_bot->IsInWorld() &&
         m_bot->IsAlive() &&
         HasBotState(STATE_FOLLOW_INPROGRESS))

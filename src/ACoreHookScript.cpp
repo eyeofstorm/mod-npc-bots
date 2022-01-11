@@ -52,7 +52,7 @@ bool BotCommandsScript::HandleBotSpawnCommand(ChatHandler* handler, uint32 entry
     }
 
     // check if this is a hireable bot.
-    if (creatureTemplate->Entry <= BOT_ENTRY_BASE)
+    if (creatureTemplate->Entry < BOT_ENTRY_BASE)
     {
         handler->PSendSysMessage("creature %u is not a bot!", entry);
         handler->SetSentErrorMessage(true);
@@ -60,9 +60,9 @@ bool BotCommandsScript::HandleBotSpawnCommand(ChatHandler* handler, uint32 entry
         return false;
     }
 
-    //////////////////////////////////
+    //********************************
     // spawn bot at player's position.
-    //////////////////////////////////
+    //********************************
 
     Map* map = owner->GetMap();
 
@@ -435,7 +435,7 @@ void CreatureHookScript::OnAllCreatureUpdate(Creature* creature, uint32 diff)
     {
         if (creature->GetEntry() > BOT_ENTRY_BASE)
         {
-            BotAI* ai = const_cast<BotAI*>(BotMgr::GetBotAI(creature));
+            BotAI* ai = BotMgr::GetBotAI(creature);
 
             if (ai)
             {
@@ -539,7 +539,7 @@ void MovementHandlerHookScript::OnPlayerMoveWorldport(Player* player)
                 zoneName.c_str(),
                 mapName.c_str());
 
-        BotMgr::OnPlayerMoveWorldport(player);
+        BotMgr::OnBotOwnerMoveWorldport(player);
     }
 }
 
@@ -586,6 +586,6 @@ void MovementHandlerHookScript::OnPlayerMoveTeleport(Player* player)
                 zoneName.c_str(),
                 mapName.c_str());
 
-        BotMgr::OnPlayerMoveTeleport(player);
+        BotMgr::OnBotOwnerMoveTeleport(player);
     }
 }

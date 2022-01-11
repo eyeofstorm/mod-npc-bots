@@ -107,14 +107,14 @@ public:
     static void HireBot(Player* /*owner*/, Creature* /*bot*/);
     static bool DismissBot(Creature* /*bot*/);
 
-    static BotAI const* GetBotAI(Creature const* /*bot*/);
+    static BotAI* GetBotAI(Creature const* /*bot*/);
     static int GetBotsCount(Unit* owner);
     static void SetBotLevel(Creature* /*bot*/, uint8 /*level*/, bool showLevelChange = true);
 
     //onEvent hooks
     static void OnBotSpellGo(Unit const* caster, Spell const* spell, bool ok = true);
-    static void OnPlayerMoveWorldport(Player* player);
-    static void OnPlayerMoveTeleport(Player* player);
+    static void OnBotOwnerMoveWorldport(Player* player);
+    static void OnBotOwnerMoveTeleport(Player* player);
     static bool RestrictBots(Creature const* bot, bool add);
     static bool TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, float ori);
 
