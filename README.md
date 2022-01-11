@@ -1,4 +1,4 @@
-# MY_NEW_MODULE
+# mod-npc-bots
 
 ## Description
 
@@ -12,7 +12,7 @@ Do this and that.
 ![my_new_module screenshot](/screenshots/my_module.png?raw=true "my_new_module screenshot")
 
 <!-- Video example - We can't embed videos on github, only on github.io pages. If you can, make an animated gif of your video instead (but it's not required) -->
-[![Youtube Link](https://i.imgur.com/Jhrdgv6.png)](https://www.youtube.com/watch?v=T6UEX47mPeE)
+[![Youtube Link](https://i.imgur.com/Jhrdgv6.png)](https://www.youtube.com/watch?v=cOgDy7tLNPM)
 
 
 ## Requirements
