@@ -20,7 +20,6 @@ jobs:
           - macos-11
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.os }}
-    if: github.repository == 'eyeofstorm/azerothcore-wotlk' && (github.ref == 'refs/heads/develop' || contains(github.event.pull_request.labels.*.name, 'run-build') || github.event.label.name == 'run-build')
     steps:
       - uses: actions/checkout@v2
         with:
