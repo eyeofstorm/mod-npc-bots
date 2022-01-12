@@ -1,4 +1,7 @@
-# mod-npc-bots
+# ![logo](https://raw.githubusercontent.com/azerothcore/azerothcore.github.io/master/images/logo-github.png) AzerothCore
+
+## NPC Bots
+- Latest build status with azerothcore: [![Build Status](https://github.com/eyeofstorm/mod-npc-bots/workflows/core-build/badge.svg?branch=develop&event=push)](https://github.com/eyeofstorm/mod-npc-bots)
 
 ## Description
 
