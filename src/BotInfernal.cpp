@@ -11,7 +11,7 @@ BotInfernalAI::BotInfernalAI(Creature* creature) : BotAI(creature)
 {
 }
 
-void BotInfernalAI::UpdateBotAI(uint32 uiDiff)
+void BotInfernalAI::UpdateBotAI(uint32 /*uiDiff*/)
 {
     if (!UpdateVictim())
     {

@@ -593,7 +593,7 @@ bool BotDreadlord::OnGossipHello(Player* player, Creature* bot)
     return true;
 }
 
-bool BotDreadlord::OnGossipSelect(Player* player, Creature* bot, uint32 sender, uint32 action)
+bool BotDreadlord::OnGossipSelect(Player* player, Creature* bot, uint32 sender, uint32 /*action*/)
 {
     player->PlayerTalkClass->ClearMenus();
 

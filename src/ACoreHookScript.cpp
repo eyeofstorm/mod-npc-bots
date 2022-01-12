@@ -359,7 +359,7 @@ void PlayerHookScript::OnLogout(Player* player)
 }
 
 // Called when a player switches to a new area (more accurate than UpdateZone)
-void PlayerHookScript::OnUpdateArea(Player* player, uint32 oldAreaId, uint32 newAreaId)
+void PlayerHookScript::OnUpdateArea(Player* player, uint32 /*oldAreaId*/, uint32 /*newAreaId*/)
 {
     if (player)
     {
@@ -373,7 +373,7 @@ void PlayerHookScript::OnUpdateArea(Player* player, uint32 oldAreaId, uint32 new
     }
 }
 
-void PlayerHookScript::OnLevelChanged(Player* player, uint8 oldlevel)
+void PlayerHookScript::OnLevelChanged(Player* player, uint8 /*oldlevel*/)
 {
     if (player)
     {

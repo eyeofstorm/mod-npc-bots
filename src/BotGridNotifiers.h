@@ -231,54 +231,62 @@ namespace Acore
 
     class NearbyHostileUnitInConeCheck
     {
-        public:
-            explicit NearbyHostileUnitInConeCheck(Creature* unit, float maxdist, BotAI const* botAI) : me(unit), max_range(maxdist), ai(botAI), cone(float(M_PI) / 2)
+    public:
+        explicit NearbyHostileUnitInConeCheck(Creature* unit, float maxdist, BotAI const* botAI) : me(unit), max_range(maxdist), ai(botAI), cone(float(M_PI) / 2)
+        {
+            free = ai->IAmFree();
+        }
+
+        bool operator()(Unit* u) const
+        {
+            if (u == me)
             {
-                free = ai->IAmFree();
+                return false;
             }
 
-            bool operator()(Unit* u) const
+            if (!free && !u->IsInCombat())
             {
-                if (u == me)
-                    return false;
+                return false;
+            }
 
-                if (!free && !u->IsInCombat())
-                    return false;
+            if (!u->InSamePhase(me))
+            {
+                return false;
+            }
 
-                if (!u->InSamePhase(me))
-                    return false;
+            if (u->HasUnitState(UNIT_STATE_CONFUSED | UNIT_STATE_STUNNED | UNIT_STATE_FLEEING | UNIT_STATE_DISTRACTED | UNIT_STATE_CONFUSED_MOVE))
+            {
+                return false;
+            }
 
-                if (u->HasUnitState(UNIT_STATE_CONFUSED | UNIT_STATE_STUNNED | UNIT_STATE_FLEEING | UNIT_STATE_DISTRACTED | UNIT_STATE_CONFUSED_MOVE))
-                    return false;
+            if (!me->IsWithinDistInMap(u, max_range))
+            {
+                return false;
+            }
 
-//                if (!free && u->IsControlledByPlayer())
-//                    return false;
+            if (!me->HasInArc(cone, u))
+            {
+                return false;
+            }
 
-                if (!me->IsWithinDistInMap(u, max_range))
-                    return false;
-
-                if (!me->HasInArc(cone, u))
-                    return false;
-
-                if (free)
+            if (free)
+            {
+                if (!me->IsValidAttackTarget(u) || !u->isTargetableForAttack(false))
                 {
-//                    if (u->IsControlledByPlayer())
-//                        return false;
-
-                    if (!me->IsValidAttackTarget(u) || !u->isTargetableForAttack(false))
-                        return false;
+                    return false;
                 }
-
-                return true;
             }
 
-        private:
-            Unit* me;
-            float max_range;
-            BotAI const* ai;
-            float cone;
-            bool free;
-            NearbyHostileUnitInConeCheck(NearbyHostileUnitInConeCheck const&);
+            return true;
+        }
+
+    private:
+        Unit* me;
+        float max_range;
+        BotAI const* ai;
+        float cone;
+        bool free;
+        NearbyHostileUnitInConeCheck(NearbyHostileUnitInConeCheck const&);
     };
 };
 

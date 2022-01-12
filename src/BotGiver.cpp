@@ -14,7 +14,7 @@ BotGiverAI::BotGiverAI(Creature* creature) : BotAI(creature)
 {
 }
 
-void BotGiverAI::UpdateBotAI(uint32 uiDiff)
+void BotGiverAI::UpdateBotAI(uint32 /*uiDiff*/)
 {
     if (!UpdateVictim())
     {

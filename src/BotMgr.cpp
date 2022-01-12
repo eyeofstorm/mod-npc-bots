@@ -553,7 +553,7 @@ bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, 
     return true;
 }
 
-bool BotMgr::RestrictBots(Creature const* bot, bool add)
+bool BotMgr::RestrictBots(Creature const* bot, bool /*add*/)
 {
     if (Unit* owner = GetBotAI(bot)->GetBotOwner())
     {

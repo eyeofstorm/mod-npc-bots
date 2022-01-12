@@ -198,7 +198,7 @@ void BotAI::EnterEvadeMode()
     Reset();
 }
 
-void BotAI::JustDied(Unit* pKiller)
+void BotAI::JustDied(Unit* /*killer*/)
 {
     if (!HasBotState(STATE_FOLLOW_INPROGRESS) || !m_uiLeaderGUID)
     {
@@ -567,7 +567,7 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
     }
 }
 
-void BotAI::UpdateBotAI(uint32 uiDiff)
+void BotAI::UpdateBotAI(uint32 /*uiDiff*/)
 {
     if (!UpdateVictim())
     {
@@ -1317,8 +1317,6 @@ bool BotAI::BotFinishTeleport()
 
     if (owner)
     {
-        Map* map = owner->FindMap();
-
         // update group member online state
         if (Player const* player = owner->ToPlayer())
         {
@@ -1382,18 +1380,18 @@ void BotAI::GetBotHomePosition(uint16& mapid, Position* pos)
 
 bool BotAI::IsTeleportNear(WorldObject* landPos)
 {
-     Map* landMap = landPos->GetMap();
-       Map* botMap = m_bot->GetMap();
+    Map* landMap = landPos->GetMap();
+    Map* botMap = m_bot->GetMap();
 
-       if (landMap && botMap)
-       {
-           uint32 landMapId = landPos->GetMap()->GetId();
-           uint32 botMapId = m_bot->GetMap()->GetId();
+   if (landMap && botMap)
+   {
+       uint32 landMapId = landPos->GetMap()->GetId();
+       uint32 botMapId = m_bot->GetMap()->GetId();
 
-           return landMapId == botMapId;
-       }
+       return landMapId == botMapId;
+   }
 
-       return false;
+   return false;
 }
 
 bool BotAI::IsTeleportFar(WorldObject* landPos)
