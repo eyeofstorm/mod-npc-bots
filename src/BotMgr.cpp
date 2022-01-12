@@ -549,6 +549,8 @@ bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, 
 
     TeleportFinishEvent* finishEvent = new TeleportFinishEvent(newAI);
     newAI->GetEvents()->AddEvent(finishEvent, newAI->GetEvents()->CalculateTime(urand(500, 800)));
+
+    return true;
 }
 
 bool BotMgr::RestrictBots(Creature const* bot, bool add)

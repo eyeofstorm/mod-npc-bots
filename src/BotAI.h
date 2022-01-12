@@ -100,7 +100,7 @@ public:
 
 protected:
     virtual void UpdateBotAI(uint32 uiDiff);
-    virtual void UpdateSpellCD(uint32 uiDiff) { }
+    virtual void UpdateSpellCD(uint32 /*uiDiff*/) { }
     virtual void InitCustomeSpells() { }
 
     void UpdateCommonTimers(uint32 uiDiff);
