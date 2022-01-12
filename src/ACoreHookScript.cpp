@@ -361,36 +361,6 @@ void PlayerHookScript::OnLogout(Player* player)
 // Called when a player switches to a new area (more accurate than UpdateZone)
 void PlayerHookScript::OnUpdateArea(Player* player, uint32 oldAreaId, uint32 newAreaId)
 {
-//    std::string mapName = player->FindMap() ? player->FindMap()->GetMapName() : "unknown map";
-//    std::string zoneName = "unknown";
-//    std::string oldAreaName = "unknown";
-//    std::string newAreaName = "unknown";
-//    LocaleConstant locale = sWorld->GetDefaultDbcLocale();
-//
-//    if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(player->GetZoneId()))
-//    {
-//        zoneName = zone->area_name[locale];
-//    }
-//
-//    if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(oldAreaId))
-//    {
-//        oldAreaName = area->area_name[locale];
-//    }
-//
-//    if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(newAreaId))
-//    {
-//        newAreaName = area->area_name[locale];
-//    }
-//
-//    LOG_DEBUG(
-//            "npcbots",
-//            "player [%s] switches from [%s] to [%s, %s, %s].",
-//            player->GetName().c_str(),
-//            oldAreaName.c_str(),
-//            newAreaName.c_str(),
-//            zoneName.c_str(),
-//            mapName.c_str());
-
     if (player)
     {
         if (strcmp(player->GetName().c_str(), "Felthas") == 0)
