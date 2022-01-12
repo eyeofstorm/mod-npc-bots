@@ -16,16 +16,6 @@ class UnitHookScript : public UnitScript
 {
 public:
     UnitHookScript() : UnitScript("npc_bots_unit_hook") { }
-
-public:
-    bool OnBeforePlayerTeleport(
-                Player* player,
-                uint32 mapid, float x, float y, float z, float orientation,
-                uint32 options,
-                Unit* target)
-    {
-        return true;
-    }
 };
 
 class PlayerHookScript : public PlayerScript
@@ -78,10 +68,10 @@ public:
 
     ChatCommandTable GetCommands() const override;
 
-    static bool HandleBotSpawnCommand(ChatHandler* handler, uint32 entry);
-    static bool HandleBotHireCommand(ChatHandler* handler);
-    static bool HandleBotDismissCommand(ChatHandler* handler);
-    static bool HandleBotMoveCommand(ChatHandler* handler, uint32 creatureTemplateEntry);
+    static bool HandleBotSpawnCommand(ChatHandler* /*handler*/, uint32 /*entry*/);
+    static bool HandleBotHireCommand(ChatHandler* /*handler*/);
+    static bool HandleBotDismissCommand(ChatHandler* /*handler*/);
+    static bool HandleBotMoveCommand(ChatHandler* /*handler*/, uint32 /*creatureTemplateEntry*/);
 };
 
 #endif  // _ACORE_HOOK_SCRIPT_H

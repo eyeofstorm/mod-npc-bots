@@ -14,7 +14,7 @@
 
 BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)
 {
-    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotDreadlordAI::BotDreadlordAI (this: 0X%016llX, name: %s)", (uint64)this, creature->GetName().c_str());
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotDreadlordAI::BotDreadlordAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
 
     m_checkAuraTimer = 0;
     m_potionTimer = 0;
@@ -40,16 +40,16 @@ BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)
 
     sBotsRegistry->Register(this);
 
-    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotDreadlordAI::BotDreadlordAI (this: 0X%016llX, name: %s)", (uint64)this, creature->GetName().c_str());
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotDreadlordAI::BotDreadlordAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
 }
 
 BotDreadlordAI::~BotDreadlordAI()
 {
-    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotDreadlordAI::~BotDreadlordAI (this: 0X%016llX, name: %s)", (uint64)this, m_bot->GetName().c_str());
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotDreadlordAI::~BotDreadlordAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
 
     sBotsRegistry->Unregister(this);
 
-    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotDreadlordAI::~BotDreadlordAI (this: 0X%016llX, name: %s)", (uint64)this, m_bot->GetName().c_str());
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotDreadlordAI::~BotDreadlordAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
 }
 
 void BotDreadlordAI::InitCustomeSpells()

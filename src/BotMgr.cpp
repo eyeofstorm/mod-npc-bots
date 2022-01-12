@@ -39,7 +39,7 @@ void BotsRegistry::Register(BotAI* ai)
         "npcbots",
         "register bot [GUID: %u AI: 0X%016llX  %s] to bot registry...",
         bot->GetGUID().GetCounter(),
-        (uint64)ai,
+        (unsigned long long)ai,
         bot->GetName().c_str());
 
     m_botRegistry[botGUID] = new BotEntry(ai);
@@ -71,7 +71,7 @@ void BotsRegistry::Unregister(BotAI* ai)
                 "npcbots",
                 "bot [GUID: %u AI: 0X%016llX  %s] skip unregister from bot registry.",
                 bot->GetGUID().GetCounter(),
-                (uint64)ai,
+                (unsigned long long)ai,
                 bot->GetName().c_str());
         }
         else
@@ -80,7 +80,7 @@ void BotsRegistry::Unregister(BotAI* ai)
                 "npcbots",
                 "bot [GUID: %u AI: 0X%016llX  %s] unregister from bot registry.",
                 bot->GetGUID().GetCounter(),
-                (uint64)ai,
+                (unsigned long long)ai,
                 bot->GetName().c_str());
 
             m_botRegistry.erase(botGUID);
@@ -191,7 +191,7 @@ void BotsRegistry::LogBotRegistryEntries()
                     itr->first.GetCounter(),
                     botName.c_str(),
                     botOwnerName.c_str(),
-                    entry->GetBotAI() ? (uint64)entry->GetBotAI() : 0);
+                    entry->GetBotAI() ? (unsigned long long)entry->GetBotAI() : 0);
             }
             else
             {
@@ -493,7 +493,7 @@ bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, 
             "remove bot [%s] from map [%s]. old AI(0X%016llX)",
             bot->GetName().c_str(),
             mymap->GetMapName(),
-            (uint64)oldAI);
+            (unsigned long long)oldAI);
     }
 
     // update group member online state
@@ -538,8 +538,8 @@ bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, 
          "add bot [%s] back to map [%s]. old AI(0X%016llX), new AI(0X%016llX)",
          bot->GetName().c_str(),
          newMap->GetMapName(),
-         (uint64)oldAI,
-         (uint64)newAI);
+         (unsigned long long)oldAI,
+         (unsigned long long)newAI);
 
     // restore saved old BotAI state.
     if (leader)
