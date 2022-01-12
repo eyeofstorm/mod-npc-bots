@@ -3,8 +3,6 @@ on:
   push:
     branches:
       - 'develop'
-  pull_request:
-    types: ['labeled', 'labeled', 'opened', 'synchronize', 'reopened']
 
 concurrency:
   group: ${{ github.head_ref }} || concat(${{ github.ref }}, ${{ github.workflow }})
@@ -17,7 +15,6 @@ jobs:
       matrix:
         os:
           - macos-10.15
-          - macos-11
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.os }}
     steps:
