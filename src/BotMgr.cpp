@@ -222,6 +222,7 @@ void BotMgr::HireBot(Player* owner, Creature* bot)
     bot->SetPvP(owner->IsPvP());
     bot->SetPhaseMask(owner->GetPhaseMask(), true);
     bot->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+    bot->SetReactState(REACT_DEFENSIVE);
     bot->m_ControlledByPlayer = true;
 
     BotMgr::SetBotLevel(bot, owner->getLevel(), true);
@@ -433,14 +434,20 @@ void BotMgr::OnBotOwnerMoveTeleport(Player* player)
 
                 if (bot)
                 {
+                    if (bot->IsWithinDist3d(player, 20.0f))
+                    {
+                        // skip teleport which too close to player.
+                        continue;
+                    }
+
                     if (bot->IsSummon())
                     {
                         bot->ToTempSummon()->UnSummon();
 
                         bot = player->SummonCreature(
-                                                            BOT_DREADLORD,
-                                                            *player,
-                                                            TEMPSUMMON_MANUAL_DESPAWN);
+                                            BOT_DREADLORD,
+                                            *player,
+                                            TEMPSUMMON_MANUAL_DESPAWN);
 
                         if (bot)
                         {

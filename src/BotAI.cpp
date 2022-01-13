@@ -783,7 +783,7 @@ Unit* BotAI::FindAOETarget(float dist, uint32 minTargetNum) const
 
     if (unitList.size() < minTargetNum)
     {
-        return nullptr;
+        return m_bot->GetVictim();
     }
 
     Unit* unit = nullptr;
