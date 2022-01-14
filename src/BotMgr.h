@@ -117,9 +117,6 @@ public:
     static void OnBotOwnerMoveTeleport(Player* player);
     static bool RestrictBots(Creature const* bot, bool add);
     static bool TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, float ori);
-
-private:
-    static void CleanupsBeforeBotDismiss(Creature* /*bot*/);
 };
 
 #endif //_BOT_MGR_H 

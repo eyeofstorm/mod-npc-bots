@@ -9,25 +9,6 @@
 
 #include "EventProcessor.h"
 
-class TeleportHomeEvent : public BasicEvent
-{
-    friend class BotAI;
-    friend class BotMgr;
-
-    protected:
-        TeleportHomeEvent(BotAI* botAI) : m_botAI(botAI) {}
-        ~TeleportHomeEvent() {}
-
-        bool Execute(uint64 /*e_time*/, uint32 /*p_time*/)
-        {
-            m_botAI->BotTeleportHome();
-            return true;
-        }
-
-    private:
-        BotAI* m_botAI;
-};
-
 class TeleportFinishEvent : public BasicEvent
 {
     friend class BotAI;

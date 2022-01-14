@@ -250,66 +250,25 @@ bool BotMgr::DismissBot(Creature* bot)
 
     if (bot->IsSummon())
     {
-        LOG_DEBUG("npcbots", "end dismiss bot [%s].", bot->GetName().c_str());
+        if (BotAI* ai = (BotAI*)bot->AI())
+        {
+            ai->SetBotOwner(nullptr);
+            ai->UnSummonBotPet();
+            ai->SetFollowComplete();
+        }
 
         bot->ToTempSummon()->UnSummon();
 
+        LOG_DEBUG("npcbots", "end dismiss bot [%s]. OK...", bot->GetName().c_str());
+
         return true;
     }
-
-    CleanupsBeforeBotDismiss(bot);
-
-    if (bot->IsInWorld())
+    else
     {
-        Map* map = bot->FindMap();
+        LOG_DEBUG("npcbots", "end dismiss bot [%s]. Failed...", bot->GetName().c_str());
 
-        if (!map || map->IsDungeon())
-        {
-            BotAI* botAI = (BotAI *)bot->AI();
-
-            TeleportHomeEvent* homeEvent = new TeleportHomeEvent(botAI);
-            botAI->GetEvents()->AddEvent(homeEvent, botAI->GetEvents()->CalculateTime(50));
-        }
-        else
-        {
-            LOG_DEBUG("npcbots", "bot [%s] despawned...", bot->GetName().c_str());
-
-            bot->DespawnOrUnsummon();
-        }
+        return false;
     }
-
-    sBotsRegistry->LogBotRegistryEntries();
-
-    LOG_DEBUG("npcbots", "end dismiss bot [%s].", bot->GetName().c_str());
-
-    return true;
-}
-
-void BotMgr::CleanupsBeforeBotDismiss(Creature* bot)
-{
-    ASSERT(bot != nullptr);
-
-    if (BotAI* ai = (BotAI*)bot->AI())
-    {
-        ai->SetBotOwner(nullptr);
-        ai->UnSummonBotPet();
-        ai->SetFollowComplete();
-    }
-
-    if (bot->GetVehicle())
-    {
-        bot->ExitVehicle();
-    }
-
-    bot->SetOwnerGUID(ObjectGuid::Empty);
-    bot->SetCreatorGUID(ObjectGuid::Empty);
-    bot->SetByteValue(UNIT_FIELD_BYTES_2, 1, 0);
-    bot->SetPhaseMask(0, true);
-    bot->SetFaction(bot->GetCreatureTemplate()->faction);
-    bot->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
-    bot->m_ControlledByPlayer = false;
-
-    SetBotLevel(bot, bot->GetCreatureTemplate()->minlevel, false);
 }
 
 BotAI* BotMgr::GetBotAI(Creature const* bot)
@@ -428,42 +387,34 @@ void BotMgr::OnBotOwnerMoveTeleport(Player* player)
         {
             BotEntry* entry = itr->second;
 
-            if (entry)
+            if (!entry)
             {
-                Creature* bot = entry->GetBot();
+                continue;
+            }
 
-                if (bot)
-                {
-                    if (bot->IsWithinDist3d(player, 20.0f))
-                    {
-                        // skip teleport which too close to player.
-                        continue;
-                    }
+            Creature* bot = entry->GetBot();
 
-                    if (bot->IsSummon())
-                    {
-                        bot->ToTempSummon()->UnSummon();
+            if (!bot)
+            {
+                continue;
+            }
 
-                        bot = player->SummonCreature(
-                                            BOT_DREADLORD,
-                                            *player,
-                                            TEMPSUMMON_MANUAL_DESPAWN);
+            if (bot->IsWithinDist3d(player, 20.0f))
+            {
+                // skip teleport which too close to player.
+                continue;
+            }
 
-                        if (bot)
-                        {
-                            BotMgr::HireBot(player, bot);
-                        }
-                    }
-                    else
-                    {
-                        BotAI* ai = entry->GetBotAI();
+            BotMgr::DismissBot(bot);
 
-                        if (ai)
-                        {
-                            ai->OnBotOwnerMoveTeleport(player);
-                        }
-                    }
-                }
+            bot = player->SummonCreature(
+                                BOT_DREADLORD,
+                                *player,
+                                TEMPSUMMON_MANUAL_DESPAWN);
+
+            if (bot)
+            {
+                BotMgr::HireBot(player, bot);
             }
         }
     }

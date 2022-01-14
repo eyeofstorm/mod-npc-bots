@@ -241,26 +241,43 @@ bool BotDreadlordAI::DoSummonInfernoIfReady(uint32 uiDiff)
     if (isSpellReady && !m_pet && isInCombat && hasMana && Rand() < 60)
     {
         float maxRange = DoGetSpellMaxRange(INFERNO_1);
+
         Unit* target = FindAOETarget(maxRange, 3);
 
         if (target)
         {
             m_infernoSpwanPos = target->GetPosition();
+        }
+        else if (Unit* victim = m_bot->GetVictim())
+        {
+            m_infernoSpwanPos = victim->GetPosition();
+        }
+        else
+        {
+            m_bot->GetNearPoint(
+                        m_bot,
+                        m_infernoSpwanPos.m_positionX,
+                        m_infernoSpwanPos.m_positionY,
+                        m_infernoSpwanPos.m_positionZ,
+                        m_infernoSpwanPos.m_orientation,
+                        5.f,
+                        0.f);
+        }
 
-            // dummy summon infernal
-            SpellCastResult result = m_bot->CastSpell(
-                                                m_infernoSpwanPos.m_positionX,
-                                                m_infernoSpwanPos.m_positionY,
-                                                m_infernoSpwanPos.m_positionZ,
-                                                INFERNO_1,
-                                                false);
+        // dummy summon infernal
+        SpellCastResult result = m_bot->CastSpell(
+                                            m_infernoSpwanPos.m_positionX,
+                                            m_infernoSpwanPos.m_positionY,
+                                            m_infernoSpwanPos.m_positionZ,
+                                            INFERNO_1,
+                                            false);
 
-            if (result == SPELL_FAILED_SUCCESS || result == SPELL_CAST_OK)
-            {
-                SetSpellCooldown(INFERNO_1, INFERNAL_CD);
+        if (result == SPELL_FAILED_SUCCESS || result == SPELL_CAST_OK)
+        {
+            SetGlobalCooldown(sSpellMgr->GetSpellInfo(INFERNO_1)->StartRecoveryTime);
+            SetSpellCooldown(INFERNO_1, INFERNAL_CD);
 
-                return true;
-            }
+            return true;
         }
     }
 
@@ -298,6 +315,7 @@ bool BotDreadlordAI::DoCastDreadlordSpellSleep(uint32 diff)
 
         if (result == SPELL_FAILED_SUCCESS || result == SPELL_CAST_OK)
         {
+            SetGlobalCooldown(sSpellMgr->GetSpellInfo(SLEEP_1)->StartRecoveryTime);
             SetSpellCooldown(SLEEP_1, SLEEP_CD);
 
             return true;
@@ -313,6 +331,7 @@ bool BotDreadlordAI::DoCastDreadlordSpellSleep(uint32 diff)
 
         if (result == SPELL_FAILED_SUCCESS || result == SPELL_CAST_OK)
         {
+            SetGlobalCooldown(sSpellMgr->GetSpellInfo(SLEEP_1)->StartRecoveryTime);
             SetSpellCooldown(SLEEP_1, SLEEP_CD);
 
             return true;
@@ -328,6 +347,7 @@ bool BotDreadlordAI::DoCastDreadlordSpellSleep(uint32 diff)
 
         if (result == SPELL_FAILED_SUCCESS || result == SPELL_CAST_OK)
         {
+            SetGlobalCooldown(sSpellMgr->GetSpellInfo(SLEEP_1)->StartRecoveryTime);
             SetSpellCooldown(SLEEP_1, SLEEP_CD);
 
             return true;
@@ -372,6 +392,7 @@ void BotDreadlordAI::DoDreadlordAttackIfReady(uint32 uiDiff)
 
             if (result == SPELL_FAILED_SUCCESS || result == SPELL_CAST_OK)
             {
+                SetGlobalCooldown(sSpellMgr->GetSpellInfo(CARRION_SWARM_1)->StartRecoveryTime);
                 SetSpellCooldown(CARRION_SWARM_1, CARRION_CD);
 
                 return;
@@ -405,7 +426,7 @@ void BotDreadlordAI::OnClassSpellGo(SpellInfo const* spellInfo)
 
 void BotDreadlordAI::CheckAura(uint32 uiDiff)
 {
-    if (m_checkAuraTimer > uiDiff || IsCasting())
+    if (m_checkAuraTimer > uiDiff || m_gcdTimer > uiDiff || IsCasting())
     {
         return;
     }
@@ -491,6 +512,7 @@ void BotDreadlordAI::SummonBotPet(const Position *pos)
     }
 
     Creature* dreadlord = m_bot;
+
     Creature* infernal = dreadlord->SummonCreature(
                                         BOT_PET_INFERNAL,
                                         *pos,

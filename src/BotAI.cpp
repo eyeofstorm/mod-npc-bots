@@ -30,6 +30,7 @@ static uint16 __rand; //calculated for each bot separately once every updateAI t
 
 BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
 {
+    m_gcdTimer = 0;
     m_uiFollowerTimer = 2500;
     m_uiWaitTimer = 0;
     m_uiUpdateTimerMedium = 0;
@@ -242,24 +243,16 @@ void BotAI::JustRespawned()
     Reset();
 }
 
-void BotAI::OnCreatureFinishedUpdate(uint32 uiDiff)
+bool BotAI::OnBeforeCreatureUpdate(uint32 uiDiff)
 {
-    if (m_uiWaitTimer > uiDiff)
-    {
-        m_uiWaitTimer -= uiDiff;
-    }
+    UpdateCommonTimers(uiDiff);
 
-    if (m_uiUpdateTimerMedium > uiDiff)
-    {
-        m_uiUpdateTimerMedium -= uiDiff;
-    }
+    return true;
 }
 
 bool BotAI::UpdateCommonBotAI(uint32 uiDiff)
 {
     m_lastUpdateDiff = uiDiff;
-
-    UpdateCommonTimers(uiDiff);
 
     UpdateFollowerAI(uiDiff);
 
@@ -450,9 +443,24 @@ void BotAI::UpdateCommonTimers(uint32 uiDiff)
 
     UpdateSpellCD(uiDiff);
 
+    if (m_gcdTimer > uiDiff)
+    {
+        m_gcdTimer -= uiDiff;
+    }
+
+    if (m_uiWaitTimer > uiDiff)
+    {
+        m_uiWaitTimer -= uiDiff;
+    }
+
     if (m_potionTimer > uiDiff && (m_potionTimer < POTION_CD || !m_bot->IsInCombat()))
     {
         m_potionTimer -= uiDiff;
+    }
+
+    if (m_uiUpdateTimerMedium > uiDiff)
+    {
+        m_uiUpdateTimerMedium -= uiDiff;
     }
 }
 
@@ -760,8 +768,13 @@ void BotAI::GenerateRand() const
     __rand = urand(0, IAmFree() ? 100 : 100 + (botCount - 1) * 2);
 }
 
-bool BotAI::IsSpellReady(uint32 basespell, uint32 diff) const
+bool BotAI::IsSpellReady(uint32 basespell, uint32 diff, bool checkGCD) const
 {
+    if (checkGCD && m_gcdTimer > diff)
+    {
+        return false;
+    }
+
     BotSpellMap::const_iterator itr = m_spells.find(basespell);
 
     if (itr == m_spells.end())
@@ -783,7 +796,7 @@ Unit* BotAI::FindAOETarget(float dist, uint32 minTargetNum) const
 
     if (unitList.size() < minTargetNum)
     {
-        return m_bot->GetVictim();
+        return nullptr;
     }
 
     Unit* unit = nullptr;
@@ -936,6 +949,17 @@ void BotAI::InitSpellMap(uint32 basespell, bool forceadd, bool forwardRank)
     }
 
     newSpell->spellId = spellId;
+}
+
+void BotAI::SetGlobalCooldown(uint32 gcd)
+{
+    m_gcdTimer = gcd;
+
+    //global cd cannot be less than 1000 ms
+    m_gcdTimer = std::max<uint32>(m_gcdTimer, 1000);
+
+    //global cd cannot be greater than 1500 ms
+    m_gcdTimer = std::min<uint32>(m_gcdTimer, 1500);
 }
 
 void BotAI::SetSpellCooldown(uint32 basespell, uint32 msCooldown)
@@ -1287,23 +1311,6 @@ void BotAI::OnBotOwnerMoveWorldport(Player* owner)
     }
 }
 
-void BotAI::OnBotOwnerMoveTeleport(Player* owner)
-{
-    if (m_bot->IsInWorld() &&
-        m_bot->IsAlive() &&
-        HasBotState(STATE_FOLLOW_INPROGRESS))
-    {
-        if (IsTeleportNear(owner))
-        {
-            m_bot->NearTeleportTo(
-                        owner->GetPositionX(),
-                        owner->GetPositionY(),
-                        owner->GetPositionZ(),
-                        owner->GetOrientation());
-        }
-    }
-}
-
 bool BotAI::BotFinishTeleport()
 {
     LOG_DEBUG("npcbots", "bot [%s] finishing teleport...", m_bot->GetName().c_str());
@@ -1343,69 +1350,4 @@ bool BotAI::BotFinishTeleport()
     }
 
     return true;
-}
-
-void BotAI::BotTeleportHome()
-{
-    ASSERT(m_bot != nullptr);
-
-    uint16 mapid;
-    Position pos;
-
-    GetBotHomePosition(mapid, &pos);
-    Map* map = sMapMgr->CreateBaseMap(mapid);
-
-    LOG_DEBUG(
-        "npcbots",
-        "bot [%s] teleport to home [%s].",
-        m_bot->GetName().c_str(),
-        map ? map->GetMapName() : "known");
-
-    BotMgr::TeleportBot(
-                m_bot,
-                map,
-                pos.m_positionX,
-                pos.m_positionY,
-                pos.m_positionZ,
-                pos.m_orientation);
-}
-
-void BotAI::GetBotHomePosition(uint16& mapid, Position* pos)
-{
-    CreatureData const* data = m_bot->GetCreatureData();
-
-    mapid = data->mapid;
-    pos->Relocate(data->posX, data->posY, data->posZ, data->orientation);
-}
-
-bool BotAI::IsTeleportNear(WorldObject* landPos)
-{
-    Map* landMap = landPos->GetMap();
-    Map* botMap = m_bot->GetMap();
-
-   if (landMap && botMap)
-   {
-       uint32 landMapId = landPos->GetMap()->GetId();
-       uint32 botMapId = m_bot->GetMap()->GetId();
-
-       return landMapId == botMapId;
-   }
-
-   return false;
-}
-
-bool BotAI::IsTeleportFar(WorldObject* landPos)
-{
-    Map* landMap = landPos->GetMap();
-    Map* botMap = m_bot->GetMap();
-
-    if (landMap && botMap)
-    {
-        uint32 landMapId = landPos->GetMap()->GetId();
-        uint32 botMapId = m_bot->GetMap()->GetId();
-
-        return landMapId != botMapId;
-    }
-
-    return false;
 }

@@ -39,7 +39,7 @@ public:
     CreatureHookScript() : AllCreatureScript("npc_bots_creature_hook") { }
 
 public:
-    void OnAllCreatureUpdate(Creature* /*creature*/, uint32 /*diff*/) override;
+    bool OnBeforeCreatureUpdate(Creature* /*creature*/, uint32 /*diff*/) override;
 };
 
 class SpellHookScript : public SpellSC
@@ -61,17 +61,17 @@ public:
     void OnPlayerMoveTeleport(Player* /*player*/) override;
 };
 
-class BotCommandsScript : public CommandScript
-{
-public:
-    BotCommandsScript() : CommandScript("npc_bot_commands_script") { }
-
-    ChatCommandTable GetCommands() const override;
-
-    static bool HandleBotSpawnCommand(ChatHandler* /*handler*/, uint32 /*entry*/);
-    static bool HandleBotHireCommand(ChatHandler* /*handler*/);
-    static bool HandleBotDismissCommand(ChatHandler* /*handler*/);
-    static bool HandleBotMoveCommand(ChatHandler* /*handler*/, uint32 /*creatureTemplateEntry*/);
-};
+//class BotCommandsScript : public CommandScript
+//{
+//public:
+//    BotCommandsScript() : CommandScript("npc_bot_commands_script") { }
+//
+//    ChatCommandTable GetCommands() const override;
+//
+//    static bool HandleBotSpawnCommand(ChatHandler* /*handler*/, uint32 /*entry*/);
+//    static bool HandleBotHireCommand(ChatHandler* /*handler*/);
+//    static bool HandleBotDismissCommand(ChatHandler* /*handler*/);
+//    static bool HandleBotMoveCommand(ChatHandler* /*handler*/, uint32 /*creatureTemplateEntry*/);
+//};
 
 #endif  // _ACORE_HOOK_SCRIPT_H

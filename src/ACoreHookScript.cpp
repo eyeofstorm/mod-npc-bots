@@ -17,318 +17,318 @@
 // Azeroth core hook scripts here
 /////////////////////////////////
 
-ChatCommandTable BotCommandsScript::GetCommands() const
-{
-    static ChatCommandTable botCommandTable =
-    {
-        { "spawn",   HandleBotSpawnCommand,     SEC_MODERATOR, Console::Yes },
-        { "hire",    HandleBotHireCommand,      SEC_MODERATOR, Console::Yes },
-        { "dismiss", HandleBotDismissCommand,   SEC_MODERATOR, Console::Yes },
-        { "move",    HandleBotMoveCommand,      SEC_MODERATOR, Console::Yes }
-    };
-
-    static ChatCommandTable commandTable =
-    {
-        { "bot", botCommandTable }
-    };
-
-    return commandTable;
-}
-
-// spawn bot
-bool BotCommandsScript::HandleBotSpawnCommand(ChatHandler* handler, uint32 entry)
-{
-    WorldSession* session = handler->GetSession();
-    Player* owner = session->GetPlayer();
-
-    const CreatureTemplate* creatureTemplate = sObjectMgr->GetCreatureTemplate(entry);
-
-    if (!creatureTemplate)
-    {
-        handler->PSendSysMessage("entry %u is not defined in creature_template table!", entry);
-        handler->SetSentErrorMessage(true);
-
-        return false;
-    }
-
-    // check if this is a hireable bot.
-    if (creatureTemplate->Entry < BOT_ENTRY_BASE)
-    {
-        handler->PSendSysMessage("creature %u is not a bot!", entry);
-        handler->SetSentErrorMessage(true);
-
-        return false;
-    }
-
-    //********************************
-    // spawn bot at player's position.
-    //********************************
-
-    Map* map = owner->GetMap();
-
-    float x = owner->GetPositionX();
-    float y = owner->GetPositionY();
-    float z = owner->GetPositionZ();
-    float o = owner->GetOrientation();
-
-    if (Transport* tt = owner->GetTransport())
-    {
-        if (MotionTransport* trans = tt->ToMotionTransport())
-        {
-            ObjectGuid::LowType guid = sObjectMgr->GenerateCreatureSpawnId();
-            CreatureData& data = sObjectMgr->NewOrExistCreatureData(guid);
-
-            data.id = entry;
-            data.posX = x;
-            data.posY = y;
-            data.posZ = z;
-            data.orientation = o;
-
-            Creature* creature = trans->CreateNPCPassenger(guid, &data);
-
-            creature->SaveToDB(
-                        trans->GetGOInfo()->moTransport.mapID,
-                        1 << map->GetSpawnMode(),
-                        owner->GetPhaseMaskForSpawn());
-
-            sObjectMgr->AddCreatureToGrid(guid, &data);
-
-            return true;
-        }
-    }
-
-    Creature* bot = new Creature();
-
-    if (
-        !bot->Create(
-                map->GenerateLowGuid<HighGuid::Unit>(),
-                map,
-                owner->GetPhaseMaskForSpawn(),
-                entry,
-                0,
-                x, y, z, o)
-        )
-    {
-        delete bot;
-        return false;
-    }
-
-    bot->SetDefaultMovementType(RANDOM_MOTION_TYPE);
-    bot->SetWanderDistance(4.0f);
-    bot->SetRespawnDelay(1);
-
-    bot->SaveToDB(
-            map->GetId(),
-            (1 << map->GetSpawnMode()),
-            owner->GetPhaseMaskForSpawn());
-
-    ObjectGuid::LowType spawnId = bot->GetSpawnId();
-
-    bot->CleanupsBeforeDelete();
-    delete bot;
-
-    bot = new Creature();
-
-    if (!bot->LoadCreatureFromDB(spawnId, map, true, false, false))
-    {
-        delete bot;
-        return false;
-    }
-
-    sObjectMgr->AddCreatureToGrid(spawnId, sObjectMgr->GetCreatureData(spawnId));
-
-    handler->SendSysMessage("bot successfully spawned.");
-
-    return true;
-}
-
-// hire bot
-bool BotCommandsScript::HandleBotHireCommand(ChatHandler* handler)
-{
-    WorldSession* session = handler->GetSession();
-    Player* owner = session->GetPlayer();
-    Unit* unit = owner->GetSelectedUnit();
-
-    if (!unit)
-    {
-        handler->SendSysMessage("please selete the bot you want to hire.");
-        handler->SetSentErrorMessage(true);
-
-        return false;
-    }
-
-    Creature* bot = unit->ToCreature();
-
-    if (!bot)
-    {
-        handler->SendSysMessage("for some reason, you can not hire this bot.");
-        handler->SetSentErrorMessage(true);
-
-        return false;
-    }
-
-    if (bot->GetCreatureTemplate()->Entry <= BOT_ENTRY_BASE)
-    {
-        handler->SendSysMessage("the creature that you seleted is not a hireable bot.");
-        handler->SetSentErrorMessage(true);
-
-        return false;
-    }
-
-    BotMgr::HireBot(owner, bot);
-
-    handler->SendSysMessage("bot successfully added.");
-
-    return true;
-}
-
-// dismiss bot
-bool BotCommandsScript::HandleBotDismissCommand(ChatHandler* handler)
-{
-    WorldSession* session = handler->GetSession();
-    Player* owner = session->GetPlayer();
-    Unit* selectedUnit = owner->GetSelectedUnit();
-
-    if (!selectedUnit)
-    {
-        handler->SendSysMessage("please selete the bot you want to dismiss.");
-        handler->SetSentErrorMessage(true);
-
-        return false;
-    }
-
-    Creature* bot = selectedUnit->ToCreature();
-
-    if (!bot)
-    {
-        handler->SendSysMessage("for some reason, you can not dismiss this bot.");
-        handler->SetSentErrorMessage(true);
-
-        return false;
-    }
-
-    if (bot->GetCreatureTemplate()->Entry <= BOT_ENTRY_BASE)
-    {
-        handler->SendSysMessage("the creature that you seleted is not a bot.");
-        handler->SetSentErrorMessage(true);
-
-        return false;
-    }
-
-    if (BotMgr::DismissBot(bot))
-    {
-        handler->SendSysMessage("bot successfully dismissed.");
-
-        return true;
-    }
-    else
-    {
-        handler->SendSysMessage("bot dismiss failed.");
-        handler->SetSentErrorMessage(true);
-
-        return false;
-    }
-}
-
-// move bot to player position
-bool BotCommandsScript::HandleBotMoveCommand(ChatHandler* handler, uint32 creatureTemplateEntry)
-{
-    WorldSession* session = handler->GetSession();
-    Player* player = session->GetPlayer();
-
-    const CreatureTemplate* creatureTemplate = sObjectMgr->GetCreatureTemplate(creatureTemplateEntry);
-
-    if (!creatureTemplate)
-    {
-        handler->PSendSysMessage("entry %u is not defined in creature_template table!", creatureTemplateEntry);
-        handler->SetSentErrorMessage(true);
-
-        return false;
-    }
-
-    // check if this is a hireable bot.
-    if (creatureTemplate->Entry <= BOT_ENTRY_BASE)
-    {
-        handler->PSendSysMessage("creature(entry: %u) is not a bot!", creatureTemplateEntry);
-        handler->SetSentErrorMessage(true);
-
-        return false;
-    }
-
-    Creature *bot = sBotsRegistry->FindFirstBot(creatureTemplateEntry);
-
-    if (!bot)
-    {
-        handler->PSendSysMessage("bot(entry: %u) is not spawned!", creatureTemplateEntry);
-        handler->SetSentErrorMessage(true);
-
-        return false;
-    }
-
-    uint32 lowguid = bot->GetSpawnId();
-    CreatureData const* data = sObjectMgr->GetCreatureData(lowguid);
-
-    if (!data)
-    {
-        handler->PSendSysMessage(LANG_COMMAND_CREATGUIDNOTFOUND, lowguid);
-        handler->SetSentErrorMessage(true);
-
-        return false;
-    }
-
-    CreatureData* cdata = const_cast<CreatureData*>(data);
-
-    Position spawnPoint = player->GetPosition();
-    spawnPoint.GetPosition(cdata->posX, cdata->posY, cdata->posZ, cdata->orientation);
-    cdata->mapid = player->GetMapId();
-
-    WorldDatabase.PExecute(
-        "UPDATE creature SET position_x = %.3f, position_y = %.3f, position_z = %.3f, orientation = %.3f, map = %u WHERE guid = %u",
-        cdata->posX, cdata->posY, cdata->posZ, cdata->orientation, uint32(cdata->mapid), lowguid);
-
-    if (BotMgr::GetBotAI(bot)->IAmFree() && bot->IsInWorld() && !bot->IsInCombat() && bot->IsAlive())
-    {
-        BotMgr::TeleportBot(
-                    bot,
-                    player->GetMap(),
-                    spawnPoint.m_positionX,
-                    spawnPoint.m_positionY,
-                    spawnPoint.m_positionZ,
-                    spawnPoint.m_orientation);
-
-        LOG_DEBUG(
-              "npcbots",
-              "bot [%s] was moved to player [%s].",
-              bot->GetName().c_str(),
-              player->GetName().c_str());
-
-        handler->PSendSysMessage(
-                     "bot [%s] was moved to player [%s].",
-                     bot->GetName().c_str(),
-                     player->GetName().c_str());
-
-        return true;
-    }
-
-    LOG_DEBUG(
-          "npcbots",
-          "bot [%s] cannot moved to player [%s]. IAmFree: %s, IsInWorld: %s, IsInCombat %s, IsAlive: %s",
-          bot->GetName().c_str(),
-          player->GetName().c_str(),
-          BotMgr::GetBotAI(bot)->IAmFree() ? "true" : "false",
-          bot->IsInWorld() ? "true" : "false",
-          bot->IsInCombat() ? "true" : "false",
-          bot->IsAlive() ? "true" : "false");
-
-    handler->PSendSysMessage(
-                 "bot [%s] cannot moved to player [%s].",
-                 bot->GetName().c_str(),
-                 player->GetName().c_str());
-
-    handler->SetSentErrorMessage(true);
-
-    return false;
-}
+//ChatCommandTable BotCommandsScript::GetCommands() const
+//{
+//    static ChatCommandTable botCommandTable =
+//    {
+//        { "spawn",   HandleBotSpawnCommand,     SEC_MODERATOR, Console::Yes },
+//        { "hire",    HandleBotHireCommand,      SEC_MODERATOR, Console::Yes },
+//        { "dismiss", HandleBotDismissCommand,   SEC_MODERATOR, Console::Yes },
+//        { "move",    HandleBotMoveCommand,      SEC_MODERATOR, Console::Yes }
+//    };
+//
+//    static ChatCommandTable commandTable =
+//    {
+//        { "bot", botCommandTable }
+//    };
+//
+//    return commandTable;
+//}
+//
+//// spawn bot
+//bool BotCommandsScript::HandleBotSpawnCommand(ChatHandler* handler, uint32 entry)
+//{
+//    WorldSession* session = handler->GetSession();
+//    Player* owner = session->GetPlayer();
+//
+//    const CreatureTemplate* creatureTemplate = sObjectMgr->GetCreatureTemplate(entry);
+//
+//    if (!creatureTemplate)
+//    {
+//        handler->PSendSysMessage("entry %u is not defined in creature_template table!", entry);
+//        handler->SetSentErrorMessage(true);
+//
+//        return false;
+//    }
+//
+//    // check if this is a hireable bot.
+//    if (creatureTemplate->Entry < BOT_ENTRY_BASE)
+//    {
+//        handler->PSendSysMessage("creature %u is not a bot!", entry);
+//        handler->SetSentErrorMessage(true);
+//
+//        return false;
+//    }
+//
+//    //********************************
+//    // spawn bot at player's position.
+//    //********************************
+//
+//    Map* map = owner->GetMap();
+//
+//    float x = owner->GetPositionX();
+//    float y = owner->GetPositionY();
+//    float z = owner->GetPositionZ();
+//    float o = owner->GetOrientation();
+//
+//    if (Transport* tt = owner->GetTransport())
+//    {
+//        if (MotionTransport* trans = tt->ToMotionTransport())
+//        {
+//            ObjectGuid::LowType guid = sObjectMgr->GenerateCreatureSpawnId();
+//            CreatureData& data = sObjectMgr->NewOrExistCreatureData(guid);
+//
+//            data.id = entry;
+//            data.posX = x;
+//            data.posY = y;
+//            data.posZ = z;
+//            data.orientation = o;
+//
+//            Creature* creature = trans->CreateNPCPassenger(guid, &data);
+//
+//            creature->SaveToDB(
+//                        trans->GetGOInfo()->moTransport.mapID,
+//                        1 << map->GetSpawnMode(),
+//                        owner->GetPhaseMaskForSpawn());
+//
+//            sObjectMgr->AddCreatureToGrid(guid, &data);
+//
+//            return true;
+//        }
+//    }
+//
+//    Creature* bot = new Creature();
+//
+//    if (
+//        !bot->Create(
+//                map->GenerateLowGuid<HighGuid::Unit>(),
+//                map,
+//                owner->GetPhaseMaskForSpawn(),
+//                entry,
+//                0,
+//                x, y, z, o)
+//        )
+//    {
+//        delete bot;
+//        return false;
+//    }
+//
+//    bot->SetDefaultMovementType(RANDOM_MOTION_TYPE);
+//    bot->SetWanderDistance(4.0f);
+//    bot->SetRespawnDelay(1);
+//
+//    bot->SaveToDB(
+//            map->GetId(),
+//            (1 << map->GetSpawnMode()),
+//            owner->GetPhaseMaskForSpawn());
+//
+//    ObjectGuid::LowType spawnId = bot->GetSpawnId();
+//
+//    bot->CleanupsBeforeDelete();
+//    delete bot;
+//
+//    bot = new Creature();
+//
+//    if (!bot->LoadCreatureFromDB(spawnId, map, true, false, false))
+//    {
+//        delete bot;
+//        return false;
+//    }
+//
+//    sObjectMgr->AddCreatureToGrid(spawnId, sObjectMgr->GetCreatureData(spawnId));
+//
+//    handler->SendSysMessage("bot successfully spawned.");
+//
+//    return true;
+//}
+//
+//// hire bot
+//bool BotCommandsScript::HandleBotHireCommand(ChatHandler* handler)
+//{
+//    WorldSession* session = handler->GetSession();
+//    Player* owner = session->GetPlayer();
+//    Unit* unit = owner->GetSelectedUnit();
+//
+//    if (!unit)
+//    {
+//        handler->SendSysMessage("please selete the bot you want to hire.");
+//        handler->SetSentErrorMessage(true);
+//
+//        return false;
+//    }
+//
+//    Creature* bot = unit->ToCreature();
+//
+//    if (!bot)
+//    {
+//        handler->SendSysMessage("for some reason, you can not hire this bot.");
+//        handler->SetSentErrorMessage(true);
+//
+//        return false;
+//    }
+//
+//    if (bot->GetCreatureTemplate()->Entry <= BOT_ENTRY_BASE)
+//    {
+//        handler->SendSysMessage("the creature that you seleted is not a hireable bot.");
+//        handler->SetSentErrorMessage(true);
+//
+//        return false;
+//    }
+//
+//    BotMgr::HireBot(owner, bot);
+//
+//    handler->SendSysMessage("bot successfully added.");
+//
+//    return true;
+//}
+//
+//// dismiss bot
+//bool BotCommandsScript::HandleBotDismissCommand(ChatHandler* handler)
+//{
+//    WorldSession* session = handler->GetSession();
+//    Player* owner = session->GetPlayer();
+//    Unit* selectedUnit = owner->GetSelectedUnit();
+//
+//    if (!selectedUnit)
+//    {
+//        handler->SendSysMessage("please selete the bot you want to dismiss.");
+//        handler->SetSentErrorMessage(true);
+//
+//        return false;
+//    }
+//
+//    Creature* bot = selectedUnit->ToCreature();
+//
+//    if (!bot)
+//    {
+//        handler->SendSysMessage("for some reason, you can not dismiss this bot.");
+//        handler->SetSentErrorMessage(true);
+//
+//        return false;
+//    }
+//
+//    if (bot->GetCreatureTemplate()->Entry <= BOT_ENTRY_BASE)
+//    {
+//        handler->SendSysMessage("the creature that you seleted is not a bot.");
+//        handler->SetSentErrorMessage(true);
+//
+//        return false;
+//    }
+//
+//    if (BotMgr::DismissBot(bot))
+//    {
+//        handler->SendSysMessage("bot successfully dismissed.");
+//
+//        return true;
+//    }
+//    else
+//    {
+//        handler->SendSysMessage("bot dismiss failed.");
+//        handler->SetSentErrorMessage(true);
+//
+//        return false;
+//    }
+//}
+//
+//// move bot to player position
+//bool BotCommandsScript::HandleBotMoveCommand(ChatHandler* handler, uint32 creatureTemplateEntry)
+//{
+//    WorldSession* session = handler->GetSession();
+//    Player* player = session->GetPlayer();
+//
+//    const CreatureTemplate* creatureTemplate = sObjectMgr->GetCreatureTemplate(creatureTemplateEntry);
+//
+//    if (!creatureTemplate)
+//    {
+//        handler->PSendSysMessage("entry %u is not defined in creature_template table!", creatureTemplateEntry);
+//        handler->SetSentErrorMessage(true);
+//
+//        return false;
+//    }
+//
+//    // check if this is a hireable bot.
+//    if (creatureTemplate->Entry <= BOT_ENTRY_BASE)
+//    {
+//        handler->PSendSysMessage("creature(entry: %u) is not a bot!", creatureTemplateEntry);
+//        handler->SetSentErrorMessage(true);
+//
+//        return false;
+//    }
+//
+//    Creature *bot = sBotsRegistry->FindFirstBot(creatureTemplateEntry);
+//
+//    if (!bot)
+//    {
+//        handler->PSendSysMessage("bot(entry: %u) is not spawned!", creatureTemplateEntry);
+//        handler->SetSentErrorMessage(true);
+//
+//        return false;
+//    }
+//
+//    uint32 lowguid = bot->GetSpawnId();
+//    CreatureData const* data = sObjectMgr->GetCreatureData(lowguid);
+//
+//    if (!data)
+//    {
+//        handler->PSendSysMessage(LANG_COMMAND_CREATGUIDNOTFOUND, lowguid);
+//        handler->SetSentErrorMessage(true);
+//
+//        return false;
+//    }
+//
+//    CreatureData* cdata = const_cast<CreatureData*>(data);
+//
+//    Position spawnPoint = player->GetPosition();
+//    spawnPoint.GetPosition(cdata->posX, cdata->posY, cdata->posZ, cdata->orientation);
+//    cdata->mapid = player->GetMapId();
+//
+//    WorldDatabase.PExecute(
+//        "UPDATE creature SET position_x = %.3f, position_y = %.3f, position_z = %.3f, orientation = %.3f, map = %u WHERE guid = %u",
+//        cdata->posX, cdata->posY, cdata->posZ, cdata->orientation, uint32(cdata->mapid), lowguid);
+//
+//    if (BotMgr::GetBotAI(bot)->IAmFree() && bot->IsInWorld() && !bot->IsInCombat() && bot->IsAlive())
+//    {
+//        BotMgr::TeleportBot(
+//                    bot,
+//                    player->GetMap(),
+//                    spawnPoint.m_positionX,
+//                    spawnPoint.m_positionY,
+//                    spawnPoint.m_positionZ,
+//                    spawnPoint.m_orientation);
+//
+//        LOG_DEBUG(
+//              "npcbots",
+//              "bot [%s] was moved to player [%s].",
+//              bot->GetName().c_str(),
+//              player->GetName().c_str());
+//
+//        handler->PSendSysMessage(
+//                     "bot [%s] was moved to player [%s].",
+//                     bot->GetName().c_str(),
+//                     player->GetName().c_str());
+//
+//        return true;
+//    }
+//
+//    LOG_DEBUG(
+//          "npcbots",
+//          "bot [%s] cannot moved to player [%s]. IAmFree: %s, IsInWorld: %s, IsInCombat %s, IsAlive: %s",
+//          bot->GetName().c_str(),
+//          player->GetName().c_str(),
+//          BotMgr::GetBotAI(bot)->IAmFree() ? "true" : "false",
+//          bot->IsInWorld() ? "true" : "false",
+//          bot->IsInCombat() ? "true" : "false",
+//          bot->IsAlive() ? "true" : "false");
+//
+//    handler->PSendSysMessage(
+//                 "bot [%s] cannot moved to player [%s].",
+//                 bot->GetName().c_str(),
+//                 player->GetName().c_str());
+//
+//    handler->SetSentErrorMessage(true);
+//
+//    return false;
+//}
 
 void PlayerHookScript::OnLogin(Player* player)
 {
@@ -399,7 +399,7 @@ void PlayerHookScript::OnLevelChanged(Player* player, uint8 /*oldlevel*/)
     }
 }
 
-void CreatureHookScript::OnAllCreatureUpdate(Creature* creature, uint32 diff)
+bool CreatureHookScript::OnBeforeCreatureUpdate(Creature* creature, uint32 diff)
 {
     if (creature)
     {
@@ -409,10 +409,12 @@ void CreatureHookScript::OnAllCreatureUpdate(Creature* creature, uint32 diff)
 
             if (ai)
             {
-                ai->OnCreatureFinishedUpdate(diff);
+                return ai->OnBeforeCreatureUpdate(diff);
             }
         }
     }
+
+    return true;
 }
 
 void SpellHookScript::OnSpellGo(Unit const* caster, Spell const* spell, bool ok)

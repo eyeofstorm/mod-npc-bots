@@ -9,6 +9,16 @@
 
 BotInfernalAI::BotInfernalAI(Creature* creature) : BotAI(creature)
 {
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotInfernalAI::BotInfernalAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
+
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotInfernalAI::BotInfernalAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
+}
+
+BotInfernalAI::~BotInfernalAI()
+{
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotInfernalAI::~BotInfernalAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
+
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotInfernalAI::~BotInfernalAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
 }
 
 void BotInfernalAI::UpdateBotAI(uint32 /*uiDiff*/)

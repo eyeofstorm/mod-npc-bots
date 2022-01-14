@@ -52,15 +52,12 @@ public:
     void UpdateAI(uint32) override;
 
 public:
-    void OnCreatureFinishedUpdate(uint32 uiDiff);
+    bool OnBeforeCreatureUpdate(uint32 uiDiff);
     void OnBotOwnerMoveWorldport(Player* owner);
-    void OnBotOwnerMoveTeleport(Player* owner);
     void OnBotSpellGo(Spell const* spell, bool ok = true);
     virtual void OnClassSpellGo(SpellInfo const* /*spell*/) { }
 
-    void BotTeleportHome();
     bool BotFinishTeleport();
-    void GetBotHomePosition(uint16& mapid, Position* pos);
 
     void StartFollow(Unit* leader, uint32 factionForFollower = 0);
     void SetFollowComplete();
@@ -69,14 +66,13 @@ public:
 
     bool HasBotState(uint32 uiBotState) { return (m_uiBotState & uiBotState); }
     bool IAmFree() const;
-    bool IsChanneling(Unit const* u = nullptr) const { if (!u) u = me; return u->GetCurrentSpell(CURRENT_CHANNELED_SPELL); }
-    bool IsCasting(Unit const* u = nullptr) const { if (!u) u = me; return (u->HasUnitState(UNIT_STATE_CASTING) || IsChanneling(u) || u->IsNonMeleeSpellCast(false, false, true, false, false)); }
-    bool IsSpellReady(uint32 basespell, uint32 diff) const;
+    bool IsChanneling(Unit const* u = nullptr) const { if (!u) u = m_bot; return u->GetCurrentSpell(CURRENT_CHANNELED_SPELL); }
+    bool IsCasting(Unit const* u = nullptr) const { if (!u) u = m_bot; return (u->HasUnitState(UNIT_STATE_CASTING) || IsChanneling(u) || u->IsNonMeleeSpellCast(false, false, true, false, false)); }
+    bool IsSpellReady(uint32 basespell, uint32 diff, bool checkGCD = true) const;
     bool CanBotAttackOnVehicle() const;
     bool CCed(Unit const* target, bool root = false);
-    bool IsTeleportNear(WorldObject* landPos);
-    bool IsTeleportFar(WorldObject* landPos);
 
+    void SetGlobalCooldown(uint32 gcd);
     void SetSpellCooldown(uint32 basespell, uint32 msCooldown);
     void ReduceSpellCooldown(uint32 basespell, uint32 uiDiff);
 
@@ -140,6 +136,7 @@ protected:
     EventProcessor Events;
 
     // timer
+    uint32 m_gcdTimer;
     uint32 m_lastUpdateDiff;
     uint32 m_potionTimer;
 

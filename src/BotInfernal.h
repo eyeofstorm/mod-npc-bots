@@ -20,6 +20,9 @@ class BotInfernalAI : public BotAI
 public:
     BotInfernalAI(Creature* creature);
 
+public:
+    virtual ~BotInfernalAI();
+
 protected:
     void UpdateBotAI(uint32 uiDiff) override;
 };
