@@ -5,12 +5,19 @@
 
 ## Description
 
-This module allows to do this and this.
+<p>A simple npc bot module for AzerothCore.</p>
+<p>The code base on [TrinityCore-3.3.5-with-NPCBots](https://github.com/trickerer/TrinityCore-3.3.5-with-NPCBots), but rewritten as a module of AzerothCore.</p>
+<p>This module is still in very early stages. And only have one bot dreadlord.</p>
 
 
 ## How to use ingame
 
-Do this and that.
+1) Talk to the bot giver in town.
+2) Select th bot you want to play with.
+
+<p>
+    <img src="mod-npc-bot.jpg" height="707" width="1102" />
+</p>
 
 <!-- Video example - We can't embed videos on github, only on github.io pages. If you can, make an animated gif of your video instead (but it's not required) -->
 [![Youtube Link](https://i.imgur.com/Jhrdgv6.png)](https://www.youtube.com/watch?v=cOgDy7tLNPM)
@@ -33,10 +40,10 @@ mod-npc-bots requires:
 
 ## Edit the module's configuration (optional)
 
-If you need to change the module configuration, go to your server configuration directory (where your `worldserver` or `worldserver.exe` is), copy `my_module.conf.dist` to `my_module.conf` and edit that new file.
+If you need to change the module configuration, go to your server configuration directory (where your `worldserver` or `worldserver.exe` is), copy `npcbots.conf.dist` to `npcbots.conf` and edit that new file.
 
 
 ## Credits
 
-* [Me](https://github.com/YOUR_GITHUB_NAME) (author of the module): Check out my soundcloud - Join my discord
+* [Me](https://github.com/eyeofstorm) (author of the module)
 * AzerothCore: [repository](https://github.com/azerothcore) - [website](http://azerothcore.org/) - [discord chat community](https://discord.gg/PaqQRkd)
