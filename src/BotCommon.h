@@ -53,6 +53,36 @@ uint32 const HealingPotionSpells[MAX_POTION_SPELLS][2] =
     { 70, 43185 }
 };
 
+uint32 const DrinkSpells[MAX_FEAST_SPELLS][2] =
+{
+    {  1,   430 },
+    {  5,   431 },
+    { 15,   432 },
+    { 25,  1133 },
+    { 35,  1135 },
+    { 45,  1137 },
+    { 60, 34291 },
+    { 65, 27089 },
+    { 70, 43182 },
+    { 75, 43183 },
+    { 80, 57073 }
+};
+
+uint32 const EatSpells[MAX_FEAST_SPELLS][2] =
+{
+    {  1,   433 },
+    {  5,   434 },
+    { 15,   435 },
+    { 25,  1127 },
+    { 35,  1129 },
+    { 45,  1131 },
+    { 55, 27094 },
+    { 65, 35270 },
+    { 70, 43180 }, //req 65 but
+    { 75, 45548 },
+    { 80, 45548 }
+};
+
 enum BotCommonValues
 {
 // DREADLORD

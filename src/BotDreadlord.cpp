@@ -36,6 +36,8 @@ BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)
     m_bot->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SILENCE, true);
     m_bot->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SNARE, true);
 
+    m_bot->SetReactState(REACT_DEFENSIVE);
+
     InitCustomeSpells();
 
     sBotsRegistry->Register(this);
@@ -189,7 +191,7 @@ void BotDreadlordAI::InitCustomeSpells()
     // END INFERNO VISUAL
 }
 
-void BotDreadlordAI::UpdateBotAI(uint32 uiDiff)
+void BotDreadlordAI::UpdateBotCombatAI(uint32 uiDiff)
 {
     if (!UpdateVictim())
     {
@@ -219,6 +221,11 @@ void BotDreadlordAI::UpdateBotAI(uint32 uiDiff)
         return;
     }
 
+    if (!IAmFree() && m_bot->HasReactState(REACT_PASSIVE))
+    {
+        return;
+    }
+    
     if (DoSummonInfernoIfReady(uiDiff))
     {
         return;
@@ -532,6 +539,11 @@ void BotDreadlordAI::SummonBotPet(const Position *pos)
         infernal->SetUInt32Value(UNIT_CREATED_BY_SPELL, INFERNO_1);
         infernal->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
         infernal->m_ControlledByPlayer = true;
+
+        if (m_owner)
+        {
+            infernal->SetReactState(REACT_DEFENSIVE);
+        }
 
         BotMgr::SetBotLevel(infernal, master->getLevel(), false);
 

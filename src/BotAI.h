@@ -47,9 +47,13 @@ public:
     void AttackStart(Unit*) override;
     void MoveInLineOfSight(Unit*) override;
     void EnterEvadeMode() override;
+    void EnterCombat(Unit* /*victim*/) override;
     void JustDied(Unit*) override;
     void JustRespawned() override;
     void UpdateAI(uint32) override;
+    void UpdateHealth() { m_isDoUpdateHealth = true; }
+    void UpdateMana() { m_isDoUpdateMana= true; }
+    void SpellHit(Unit* /*caster*/, SpellInfo const* /*spell*/) override;
 
 public:
     bool OnBeforeCreatureUpdate(uint32 uiDiff);
@@ -95,7 +99,7 @@ public:
     BotSpellMap const& GetSpellMap() const { return m_spells; }
 
 protected:
-    virtual void UpdateBotAI(uint32 uiDiff);
+    virtual void UpdateBotCombatAI(uint32 uiDiff);
     virtual void UpdateSpellCD(uint32 /*uiDiff*/) { }
     virtual void InitCustomeSpells() { }
 
@@ -110,13 +114,17 @@ protected:
     void DrinkPotion(bool mana);
     bool IsPotionReady() const;
     uint32 GetPotion(bool mana) const;
+    uint32 GetRation(bool drink) const;
     void StartPotionTimer();
     bool IsPotionSpell(uint32 spellId) const;
+    virtual bool CanEat() const;
+    virtual bool CanDrink() const;
 
     bool AssistPlayerInCombat(Unit* who);
 
 private:
     void UpdateFollowerAI(uint32 uiDiff);
+    void UpdateBotRations();
     void AddBotState(uint32 uiBotState) { m_uiBotState |= uiBotState; }
     void RemoveBotState(uint32 uiBotState) { m_uiBotState &= ~uiBotState; }
     bool DelayUpdateIfNeeded();
@@ -151,6 +159,11 @@ private:
     uint32 m_uiBotState;
 
     BotSpellMap m_spells;
+
+    bool m_isDoUpdateMana;
+    bool m_isDoUpdateHealth;
+    bool m_isFeastMana;
+    bool m_isFeastHealth;
 };
 
 #endif // _BOT_AI_H_

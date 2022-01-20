@@ -221,8 +221,8 @@ void BotMgr::HireBot(Player* owner, Creature* bot)
     bot->SetFaction(owner->GetFaction());
     bot->SetPvP(owner->IsPvP());
     bot->SetPhaseMask(owner->GetPhaseMask(), true);
-    bot->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
     bot->SetReactState(REACT_DEFENSIVE);
+    bot->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
     bot->m_ControlledByPlayer = true;
 
     BotMgr::SetBotLevel(bot, owner->getLevel(), true);

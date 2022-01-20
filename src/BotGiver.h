@@ -40,7 +40,7 @@ public:
     BotGiverAI(Creature* creature);
 
 protected:
-    void UpdateBotAI(uint32 uiDiff) override;
+    void UpdateBotCombatAI(uint32 uiDiff) override;
 };
 
 class BotGiver : public CreatureScript

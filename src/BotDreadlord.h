@@ -44,8 +44,8 @@ enum DreadlordSpecial
     SLEEP_COST              = 50 * 5,
     SLEEP_CD                = 6000,
     INFERNAL_COST           = 175 * 5,
-    INFERNAL_CD             = 180000,
-    INFERNAL_DURATION       = (INFERNAL_CD - 2300),
+    INFERNAL_CD             = 90000,
+    INFERNAL_DURATION       = 30000,
 
     DAMAGE_CD_REDUCTION     = 250,  //ms
     INFERNO_SPAWN_DELAY     = 650,  //ms
@@ -128,7 +128,7 @@ public:
     void SummonedCreatureDespawn(Creature* summon) override;
 
 protected:
-    void UpdateBotAI(uint32 uiDiff) override;
+    void UpdateBotCombatAI(uint32 uiDiff) override;
     void UpdateSpellCD(uint32 uiDiff) override;
     void CheckAura(uint32 uiDiff);
     void RefreshAura(uint32 spellId, int8 count = 1, Unit* target = nullptr) const;

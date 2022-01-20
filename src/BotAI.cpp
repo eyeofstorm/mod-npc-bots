@@ -59,6 +59,11 @@ BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
     }
 
     m_pet = nullptr;
+
+    m_isFeastMana = false;
+    m_isFeastHealth = false;
+    m_isDoUpdateMana = false;
+    m_isDoUpdateHealth = false;
 }
 
 BotAI::~BotAI()
@@ -128,20 +133,26 @@ void BotAI::MoveInLineOfSight(Unit* who)
         return;
     }
 
+    if (!IAmFree() && m_bot->HasReactState(REACT_PASSIVE))
+    {
+        return;
+    }
+
     if (!m_bot->HasUnitState(UNIT_STATE_STUNNED) &&
         who->isTargetableForAttack(true, m_bot) &&
         who->isInAccessiblePlaceFor(m_bot))
     {
         if (AssistPlayerInCombat(who))
         {
-            Player* player = who->GetVictim()->GetCharmerOrOwnerPlayerOrPlayerItself();
-
-            LOG_DEBUG(
-                "npcbots",
-                "bot [%s] start assist player [%s] attack creature [%s] in LOS.",
-                m_bot->GetName().c_str(),
-                player ? player->GetName().c_str() : "unknown",
-                who->GetName().c_str());
+            if (Player* player = who->GetVictim()->GetCharmerOrOwnerPlayerOrPlayerItself())
+            {
+//                LOG_DEBUG(
+//                    "npcbots",
+//                    "bot [%s] start assist player [%s] attack creature [%s] in LOS.",
+//                    m_bot->GetName().c_str(),
+//                    player->GetName().c_str(),
+//                    who->GetName().c_str());
+            }
 
             return;
         }
@@ -157,11 +168,11 @@ void BotAI::MoveInLineOfSight(Unit* who)
 
         AttackStart(who);
 
-        LOG_DEBUG(
-              "npcbots",
-              "bot [%s] start attack creature [%s] in LOS.",
-              m_bot->GetName().c_str(),
-              who->GetName().c_str());
+//        LOG_DEBUG(
+//              "npcbots",
+//              "bot [%s] start attack creature [%s] in LOS.",
+//              m_bot->GetName().c_str(),
+//              who->GetName().c_str());
 
         return;
     }
@@ -178,7 +189,7 @@ void BotAI::EnterEvadeMode()
     {
         if (m_bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
         {
-            LOG_DEBUG("npcbots", "bot [%s] left combat, returning to combat start position.", m_bot->GetName().c_str());
+//            LOG_DEBUG("npcbots", "bot [%s] left combat, returning to combat start position.", m_bot->GetName().c_str());
 
             float fPosX, fPosY, fPosZ;
             m_bot->GetPosition(fPosX, fPosY, fPosZ);
@@ -190,13 +201,21 @@ void BotAI::EnterEvadeMode()
     {
         if (m_bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
         {
-            LOG_DEBUG("npcbots", "bot [%s] left combat, returning to home.", m_bot->GetName().c_str());
+//            LOG_DEBUG("npcbots", "bot [%s] left combat, returning to home.", m_bot->GetName().c_str());
 
             m_bot->GetMotionMaster()->MoveTargetedHome();
         }
     }
 
     Reset();
+}
+
+void BotAI::EnterCombat(Unit* victim)
+{
+    if (m_bot->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP))
+    {
+        m_bot->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
+    }
 }
 
 void BotAI::JustDied(Unit* /*killer*/)
@@ -296,12 +315,33 @@ bool BotAI::UpdateCommonBotAI(uint32 uiDiff)
 
     Regenerate();
 
+    // update flags
+    if (!m_bot->IsInCombat())
+    {
+        if (!m_bot->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP))
+        {
+            m_bot->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
+        }
+
+        if (m_bot->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PET_IN_COMBAT))
+        {
+            m_bot->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PET_IN_COMBAT);
+        }
+    }
+
+    UpdateBotRations();
+
     if (DelayUpdateIfNeeded())
     {
         return false;
     }
 
     GenerateRand();
+
+    if (!m_bot->GetVehicle() && CCed(me))
+    {
+        return false;
+    }
 
     return true;
 }
@@ -480,7 +520,7 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
 
                 if (HasBotState(STATE_FOLLOW_RETURNING))
                 {
-                    LOG_DEBUG("npcbots", "bot [%s] is returning to leader.", m_bot->GetName().c_str());
+//                    LOG_DEBUG("npcbots", "bot [%s] is returning to leader.", m_bot->GetName().c_str());
 
                     RemoveBotState(STATE_FOLLOW_RETURNING);
                     m_bot->GetMotionMaster()->MoveFollow(leader, BOT_FOLLOW_DIST, BOT_FOLLOW_ANGLE);
@@ -575,9 +615,14 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
     }
 }
 
-void BotAI::UpdateBotAI(uint32 /*uiDiff*/)
+void BotAI::UpdateBotCombatAI(uint32 /*uiDiff*/)
 {
     if (!UpdateVictim())
+    {
+        return;
+    }
+
+    if (!IAmFree() && m_bot->HasReactState(REACT_PASSIVE))
     {
         return;
     }
@@ -592,7 +637,151 @@ void BotAI::UpdateAI(uint32 uiDiff)
         return;
     }
 
-    UpdateBotAI(uiDiff);
+    UpdateBotCombatAI(uiDiff);
+}
+
+void BotAI::UpdateBotRations()
+{
+    bool noFeast = m_bot->IsInCombat() || (m_bot->isMoving()) || m_bot->GetVictim() || CCed(m_bot);
+
+    // check
+    if (IAmFree() || (m_owner && !m_owner->IsSitState()))
+    {
+        if (m_isFeastMana)
+        {
+            if (noFeast || m_bot->IsStandState() || m_bot->GetMaxPower(POWER_MANA) <= 1 || m_bot->GetPower(POWER_MANA) >= m_bot->GetMaxPower(POWER_MANA))
+            {
+                std::list<uint32> spellIds;
+                Unit::AuraApplicationMap const& aurApps = m_bot->GetAppliedAuras();
+
+                for (Unit::AuraApplicationMap::const_iterator ci = aurApps.begin(); ci != aurApps.end(); ++ci)
+                {
+                    if (ci->second->GetBase()->GetSpellInfo()->GetSpellSpecific() == SPELL_SPECIFIC_DRINK &&
+                        !ci->second->GetBase()->GetSpellInfo()->HasAura(SPELL_AURA_PERIODIC_TRIGGER_SPELL)) //skip buffing food
+                    {
+                        spellIds.push_back(ci->first);
+                    }
+                }
+
+                for (std::list<uint32>::const_iterator cit = spellIds.begin(); cit != spellIds.end(); ++cit)
+                {
+                    m_bot->RemoveAurasDueToSpell(*cit);
+                }
+
+                m_isFeastMana = false;
+                UpdateMana();
+            }
+        }
+
+        if (m_isFeastHealth)
+        {
+            if (noFeast || m_bot->IsStandState() || m_bot->GetHealth() >= m_bot->GetMaxHealth())
+            {
+                std::list<uint32> spellIds;
+                Unit::AuraApplicationMap const& aurApps = m_bot->GetAppliedAuras();
+
+                for (Unit::AuraApplicationMap::const_iterator ci = aurApps.begin(); ci != aurApps.end(); ++ci)
+                {
+                    if (ci->second->GetBase()->GetSpellInfo()->GetSpellSpecific() == SPELL_SPECIFIC_FOOD &&
+                        !ci->second->GetBase()->GetSpellInfo()->HasAura(SPELL_AURA_PERIODIC_TRIGGER_SPELL)) //skip buffing food
+                    {
+                        spellIds.push_back(ci->first);
+                    }
+                }
+
+                for (std::list<uint32>::const_iterator cit = spellIds.begin(); cit != spellIds.end(); ++cit)
+                {
+                    m_bot->RemoveAurasDueToSpell(*cit);
+                }
+
+                m_isFeastHealth = false;
+            }
+        }
+    }
+
+    if (noFeast)
+    {
+        return;
+    }
+
+    // drink
+    if (!m_isFeastMana &&
+        m_bot->GetMaxPower(POWER_MANA) > 1 &&
+        !m_bot->HasAuraType(SPELL_AURA_MOUNTED) &&
+        !m_bot->isMoving() &&
+        CanDrink() &&
+        !m_bot->IsInCombat() &&
+        !m_bot->GetVehicle() &&
+        !IsCasting() &&
+        GetManaPCT(m_bot) < 75 &&
+        urand(0, 100) < 20)
+    {
+        m_bot->CastSpell(m_bot, GetRation(true), true);
+    }
+
+    // eat
+    if (!m_isFeastHealth &&
+        !m_bot->HasAuraType(SPELL_AURA_MOUNTED) &&
+        !m_bot->isMoving() &&
+        CanEat() &&
+        !m_bot->IsInCombat() &&
+        !m_bot->GetVehicle() &&
+        !IsCasting() &&
+        GetHealthPCT(m_bot) < 80 &&
+        urand(0, 100) < 20)
+    {
+        m_bot->CastSpell(m_bot, GetRation(false), true);
+    }
+}
+
+bool BotAI::CanEat() const
+{
+    return true;
+}
+
+bool BotAI::CanDrink() const
+{
+    return true;
+}
+
+void BotAI::SpellHit(Unit* caster, SpellInfo const* spell)
+{
+    if (!spell->IsPositive() &&
+        spell->GetMaxDuration() > 1000 &&
+        caster->IsControlledByPlayer() &&
+        (m_bot->GetCreatureTemplate()->Entry == BOT_DREADLORD || m_bot->GetCreatureTemplate()->Entry == BOT_INFERNAL))
+    {
+        // bots of W3 classes will not be easily CCed
+        if (spell->HasAura(SPELL_AURA_MOD_STUN) || spell->HasAura(SPELL_AURA_MOD_CONFUSE) ||
+            spell->HasAura(SPELL_AURA_MOD_PACIFY) || spell->HasAura(SPELL_AURA_MOD_ROOT))
+        {
+            if (Aura* cont = me->GetAura(spell->Id, caster->GetGUID()))
+            {
+                if (AuraApplication const* aurApp = cont->GetApplicationOfTarget(me->GetGUID()))
+                {
+                    if (!aurApp->IsPositive())
+                    {
+                        int32 dur = std::max<int32>(cont->GetMaxDuration() / 3, 1000);
+                        cont->SetDuration(dur);
+                        cont->SetMaxDuration(dur);
+                    }
+                }
+            }
+        }
+    }
+
+    if (spell->GetSpellSpecific() == SPELL_SPECIFIC_DRINK)
+    {
+        m_isFeastMana = true;
+        UpdateMana();
+        m_regenTimer = 0;
+    }
+    else if (spell->GetSpellSpecific() == SPELL_SPECIFIC_FOOD)
+    {
+        m_isFeastHealth = true;
+        UpdateHealth();
+        m_regenTimer = 0;
+    }
 }
 
 void BotAI::StartFollow(Unit* leader, uint32 factionForFollower)
@@ -1235,6 +1424,19 @@ uint32 BotAI::GetPotion(bool mana) const
 bool BotAI::IsPotionSpell(uint32 spellId) const
 {
     return spellId == GetPotion(true) || spellId == GetPotion(false);
+}
+
+uint32 BotAI::GetRation(bool drink) const
+{
+    for (int8 i = MAX_FEAST_SPELLS - 1; i >= 0; --i)
+    {
+        if (m_bot->getLevel() >= (drink ? DrinkSpells[i][0] : EatSpells[i][0]))
+        {
+            return (drink ? DrinkSpells[i][1] : EatSpells[i][1]);
+        }
+    }
+
+    return (drink ? DrinkSpells[0][1] : EatSpells[0][1]);
 }
 
 void BotAI::KillEvents(bool force)

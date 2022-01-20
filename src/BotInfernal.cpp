@@ -11,6 +11,8 @@ BotInfernalAI::BotInfernalAI(Creature* creature) : BotAI(creature)
 {
     LOG_INFO("npcbots", "↓↓↓↓↓↓ BotInfernalAI::BotInfernalAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
 
+    m_bot->SetReactState(REACT_AGGRESSIVE);
+
     LOG_INFO("npcbots", "↑↑↑↑↑↑ BotInfernalAI::BotInfernalAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
 }
 
@@ -21,12 +23,27 @@ BotInfernalAI::~BotInfernalAI()
     LOG_INFO("npcbots", "↑↑↑↑↑↑ BotInfernalAI::~BotInfernalAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
 }
 
-void BotInfernalAI::UpdateBotAI(uint32 /*uiDiff*/)
+void BotInfernalAI::UpdateBotCombatAI(uint32 /*uiDiff*/)
 {
     if (!UpdateVictim())
     {
         return;
     }
 
+    if (m_bot->HasReactState(REACT_PASSIVE))
+    {
+        return;
+    }
+
     DoMeleeAttackIfReady();
+}
+
+bool BotInfernalAI::CanEat() const
+{
+    return false;
+}
+
+bool BotInfernalAI::CanDrink() const
+{
+    return false;
 }

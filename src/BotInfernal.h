@@ -24,7 +24,10 @@ public:
     virtual ~BotInfernalAI();
 
 protected:
-    void UpdateBotAI(uint32 uiDiff) override;
+    void UpdateBotCombatAI(uint32 uiDiff) override;
+
+    bool CanEat() const override;
+    bool CanDrink() const override;
 };
 
 class BotInfernal : public CreatureScript
