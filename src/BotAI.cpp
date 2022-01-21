@@ -210,7 +210,7 @@ void BotAI::EnterEvadeMode()
     Reset();
 }
 
-void BotAI::EnterCombat(Unit* victim)
+void BotAI::EnterCombat(Unit* /*victim*/)
 {
     if (m_bot->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP))
     {
