@@ -30,6 +30,8 @@ static uint16 __rand; //calculated for each bot separately once every updateAI t
 
 BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
 {
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotAI::BotAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
+
     m_gcdTimer = 0;
     m_uiFollowerTimer = 2500;
     m_uiWaitTimer = 0;
@@ -63,16 +65,35 @@ BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
     m_isFeastMana = false;
     m_isFeastHealth = false;
     m_isDoUpdateMana = false;
-    m_isDoUpdateHealth = false;
+
+    m_botClass = CLASS_NONE;
+    m_botSpec = BOT_SPEC_DEFAULT;
+
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotAI::BotAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
 }
 
 BotAI::~BotAI()
 {
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotAI::~BotAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
+
     while (!m_spells.empty())
     {
         BotSpellMap::iterator itr = m_spells.begin();
         delete itr->second;
         m_spells.erase(itr);
+    }
+
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotAI::~BotAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
+}
+
+uint32 BotAI::GetBotClass() const
+{
+    switch (m_botClass)
+    {
+    case BOT_CLASS_DREADLORD:
+        return BOT_CLASS_PALADIN;
+    default:
+        return m_botClass;
     }
 }
 
@@ -212,6 +233,7 @@ void BotAI::EnterEvadeMode()
 
 void BotAI::EnterCombat(Unit* /*victim*/)
 {
+    // clear gossip during combat.
     if (m_bot->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP))
     {
         m_bot->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
@@ -313,6 +335,12 @@ bool BotAI::UpdateCommonBotAI(uint32 uiDiff)
         return false;
     }
 
+    if (m_isDoUpdateMana)
+    {
+        m_isDoUpdateMana = false;
+        OnManaUpdate();
+    }
+
     Regenerate();
 
     // update flags
@@ -343,7 +371,716 @@ bool BotAI::UpdateCommonBotAI(uint32 uiDiff)
         return false;
     }
 
+    UpdateStandState();
+
     return true;
+}
+
+void BotAI::OnManaUpdate() const
+{
+    if (m_bot->GetMaxPower(POWER_MANA) <= 1)
+    {
+        return;
+    }
+
+    uint8 mylevel = m_bot->getLevel();
+
+    bool fullmana = m_bot->GetPower(POWER_MANA) == m_bot->GetMaxPower(POWER_MANA);
+    float pct = fullmana ? 100.f : (float(m_bot->GetPower(POWER_MANA)) * 100.f) / float(m_bot->GetMaxPower(POWER_MANA));
+    float baseMana = 0.0f;
+
+    if (m_botClass == BOT_CLASS_BM)
+    {
+        baseMana = BASE_MANA_1_BM + (BASE_MANA_10_BM - BASE_MANA_1_BM) * (mylevel / 81.f);
+    }
+    else if (m_botClass == BOT_CLASS_SPHYNX)
+    {
+        baseMana = BASE_MANA_SPHYNX;
+    }
+    else if (m_botClass == BOT_CLASS_ARCHMAGE)
+    {
+        baseMana = BASE_MANA_1_ARCHMAGE + (BASE_MANA_10_ARCHMAGE - BASE_MANA_1_ARCHMAGE) * ((mylevel - 20) / 81.f);
+    }
+    else if (m_botClass == BOT_CLASS_DREADLORD)
+    {
+        baseMana = BASE_MANA_1_DREADLORD + (BASE_MANA_10_DREADLORD - BASE_MANA_1_DREADLORD) * ((mylevel - 60) / 83.f);
+    }
+    else if (m_botClass == BOT_CLASS_SPELLBREAKER)
+    {
+        baseMana = BASE_MANA_SPELLBREAKER;
+    }
+    else if (m_botClass == BOT_CLASS_DARK_RANGER)
+    {
+        baseMana = BASE_MANA_1_DARK_RANGER + (BASE_MANA_10_DARK_RANGER - BASE_MANA_1_DARK_RANGER) * ((mylevel - 40) / 82.f);
+    }
+    else if (m_botClass == BOT_CLASS_NECROMANCER)
+    {
+        baseMana = BASE_MANA_NECROMANCER;
+    }
+    else
+    {
+        baseMana = m_classLevelInfo->BaseMana;
+    }
+
+    LOG_DEBUG(
+        "npcbots",
+        "BotAI::OnManaUpdate() => bot [%s], m_botClass: %u, Max mana: %u, m_classLevelInfo->BaseMana: %u, pct: %.2f, baseMana: %.2f",
+        m_bot->GetName().c_str(),
+        m_botClass,
+        m_bot->GetMaxPower(POWER_MANA),
+        m_classLevelInfo->BaseMana,
+        pct,
+        baseMana);
+
+    m_bot->SetCreateMana(m_classLevelInfo->BaseMana);
+
+    float intellectValue = GetTotalBotStat(BOT_STAT_MOD_INTELLECT);
+
+    intellectValue -= std::min<float>(m_bot->GetCreateStat(STAT_INTELLECT), 20.f); //not a mistake
+    intellectValue = std::max<float>(intellectValue, 0.f);
+
+    float intellectMult = m_botClass < BOT_CLASS_EX_START ? 15.f : IsHeroExClass(m_botClass) ? 5.f : 1.5f;
+
+    baseMana += intellectValue * intellectMult + 20.f;
+    baseMana += GetTotalBotStat(BOT_STAT_MOD_MANA);
+
+    //mana bonuses
+    uint8 bonuspct = 0;
+
+    //Fel Vitality
+    if (m_botClass == BOT_CLASS_WARLOCK && mylevel >= 15)
+    {
+        bonuspct += 3;
+    }
+
+    if (bonuspct)
+    {
+        baseMana = (baseMana * (100 + bonuspct)) / 100;
+    }
+
+    baseMana = baseMana * m_bot->GetCreatureTemplate()->ModMana;
+
+    LOG_DEBUG(
+        "npcbots",
+        "BotAI::OnManaUpdate() => bot [%s], (1) intellectValue: %.2f, intellectMult: %.2f, baseMana: %.2f",
+        m_bot->GetName().c_str(),
+        intellectValue,
+        intellectMult,
+        baseMana);
+
+    if (baseMana < m_bot->GetMaxPower(POWER_MANA))
+    {
+        baseMana = m_bot->GetMaxPower(POWER_MANA);
+    }
+
+    m_bot->SetModifierValue(UNIT_MOD_MANA, BASE_VALUE, baseMana);
+    m_bot->UpdateMaxPower(POWER_MANA);
+
+    LOG_DEBUG(
+        "npcbots",
+        "BotAI::OnManaUpdate() => bot [%s], (2) Max mana: %u, Current Mana: %u",
+        m_bot->GetName().c_str(),
+        m_bot->GetMaxPower(POWER_MANA),
+        m_bot->GetPower(POWER_MANA));
+
+    m_bot->SetPower(POWER_MANA, fullmana ? m_bot->GetMaxPower(POWER_MANA) : uint32(0.5f + float(m_bot->GetMaxPower(POWER_MANA)) * pct / 100.f)); //restore pct
+
+    LOG_DEBUG(
+        "npcbots",
+        "BotAI::OnManaUpdate() => bot [%s], (3) Max mana: %u, Current Mana: %u",
+        m_bot->GetName().c_str(),
+        m_bot->GetMaxPower(POWER_MANA),
+        m_bot->GetPower(POWER_MANA));
+
+    OnManaRegenUpdate();
+}
+
+//Mana regen for minions
+void BotAI::OnManaRegenUpdate() const
+{
+    //regen_normal
+    uint8 mylevel = m_bot->getLevel();
+    float value = IAmFree() ? mylevel / 2 : 0; //200/0 mp5 at 80
+
+    float power_regen_mp5;
+    int32 modManaRegenInterrupt;
+
+    if (m_botClass < BOT_CLASS_EX_START)
+    {
+        // Mana regen from spirit and intellect
+        float spiregen = 0.001f;
+
+        if (GtRegenMPPerSptEntry const* moreRatio = sGtRegenMPPerSptStore.LookupEntry((m_botClass - 1) * GT_MAX_LEVEL + mylevel - 1))
+        {
+            spiregen = moreRatio->ratio * GetTotalBotStat(BOT_STAT_MOD_SPIRIT);
+        }
+
+        // PCT bonus from SPELL_AURA_MOD_POWER_REGEN_PERCENT aura on spirit base regen
+        value += sqrt(GetTotalBotStat(BOT_STAT_MOD_INTELLECT)) * spiregen * m_bot->GetTotalAuraMultiplierByMiscValue(SPELL_AURA_MOD_POWER_REGEN_PERCENT, POWER_MANA);
+
+        // regen from SPELL_AURA_MOD_POWER_REGEN aura (per second)
+        power_regen_mp5 = 0.2f * (m_bot->GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_POWER_REGEN, POWER_MANA) + GetTotalBotStat(BOT_STAT_MOD_MANA_REGENERATION));
+
+        if (IAmFree())
+        {
+            power_regen_mp5 += float(mylevel);
+        }
+
+        // bonus from SPELL_AURA_MOD_MANA_REGEN_FROM_STAT aura
+        Unit::AuraEffectList const& regenAura = m_bot->GetAuraEffectsByType(SPELL_AURA_MOD_MANA_REGEN_FROM_STAT);
+
+        for (Unit::AuraEffectList::const_iterator i = regenAura.begin(); i != regenAura.end(); ++i)
+        {
+            power_regen_mp5 += m_bot->GetStat(Stats((*i)->GetMiscValue())) * (*i)->GetAmount() * 0.002f; //per second
+        }
+
+        //bot also receive bonus from SPELL_AURA_MOD_POWER_REGEN_PERCENT for mp5 regen
+        power_regen_mp5 *= m_bot->GetTotalAuraMultiplierByMiscValue(SPELL_AURA_MOD_POWER_REGEN_PERCENT, POWER_MANA);
+
+        // Set regen rate in cast state apply only on spirit based regen
+        modManaRegenInterrupt = std::min<int32>(100, m_bot->GetTotalAuraModifier(SPELL_AURA_MOD_MANA_REGEN_INTERRUPT));
+    }
+    else
+    {
+        modManaRegenInterrupt = 100;
+        power_regen_mp5 = 0.0f;
+
+        if (IsHeroExClass(m_botClass))
+        {
+            float basemana;
+
+            if (BOT_CLASS_EX_START == BOT_CLASS_BM)
+            {
+                basemana = BASE_MANA_1_BM;
+            }
+            else if (BOT_CLASS_EX_START == BOT_CLASS_ARCHMAGE)
+            {
+                basemana = BASE_MANA_1_ARCHMAGE;
+            }
+            else if (BOT_CLASS_EX_START == BOT_CLASS_DREADLORD)
+            {
+                basemana = BASE_MANA_1_DREADLORD;
+            }
+            else if (BOT_CLASS_EX_START == BOT_CLASS_DARK_RANGER)
+            {
+                basemana = BASE_MANA_1_DARK_RANGER;
+            }
+            else
+            {
+                basemana = 0.f;
+            }
+
+            value = basemana * 0.0087f + 0.08f * GetTotalBotStat(BOT_STAT_MOD_INTELLECT);
+            value += 0.2f * (m_bot->GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_POWER_REGEN, POWER_MANA) + GetTotalBotStat(BOT_STAT_MOD_MANA_REGENERATION));
+            value *= m_bot->GetTotalAuraMultiplierByMiscValue(SPELL_AURA_MOD_POWER_REGEN_PERCENT, POWER_MANA);
+        }
+        else if (m_botClass == BOT_CLASS_SPHYNX)
+        {
+            value = CalculatePct(m_bot->GetCreateMana(), 2); //-2% basemana/sec
+        }
+        else if (m_botClass == BOT_CLASS_SPELLBREAKER)
+        {
+            value = 4.f; //base 0.8/sec
+            value += 0.2f * (m_bot->GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_POWER_REGEN, POWER_MANA) + GetTotalBotStat(BOT_STAT_MOD_MANA_REGENERATION));
+            value *= m_bot->GetTotalAuraMultiplierByMiscValue(SPELL_AURA_MOD_POWER_REGEN_PERCENT, POWER_MANA);
+        }
+        else if (m_botClass == BOT_CLASS_NECROMANCER)
+        {
+            value = 7.5f; //base 1.5/sec
+            value += 0.2f * (m_bot->GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_POWER_REGEN, POWER_MANA) + GetTotalBotStat(BOT_STAT_MOD_MANA_REGENERATION));
+            value *= m_bot->GetTotalAuraMultiplierByMiscValue(SPELL_AURA_MOD_POWER_REGEN_PERCENT, POWER_MANA);
+        }
+        else
+        {
+            value = 0;
+        }
+
+        if (IAmFree())
+        {
+            value += float(mylevel);
+        }
+    }
+
+    // Unrelenting Storm, Dreamstate: 12% of intellect as mana regen always (divided by 5)
+    if ((m_botClass == BOT_CLASS_SHAMAN && m_botSpec == BOT_SPEC_SHAMAN_ELEMENTAL) ||
+        (m_botClass == BOT_CLASS_DRUID && m_botSpec == BOT_SPEC_DRUID_BALANCE))
+    {
+        power_regen_mp5 += 0.024f * GetTotalBotStat(BOT_STAT_MOD_INTELLECT);
+    }
+
+    m_bot->SetStatFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER, power_regen_mp5 + CalculatePct(value, modManaRegenInterrupt));
+    m_bot->SetStatFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER, power_regen_mp5 + value);
+}
+
+inline float BotAI::GetTotalBotStat(uint8 stat) const
+{
+    int32 value = 0;
+
+// *********************************************************************
+// TODO: add equipment bonus.
+//    for (uint8 slot = BOT_SLOT_MAINHAND; slot != BOT_INVENTORY_SIZE; ++slot)
+//    {
+//        value += _stats[slot][stat];
+//    }
+// *********************************************************************
+
+    uint8 lvl = m_bot->getLevel();
+    float fval = float(value);
+
+    switch (stat)
+    {
+        case BOT_STAT_MOD_STRENGTH:
+        {
+            fval += m_bot->GetTotalStatValue(STAT_STRENGTH);
+
+            switch (m_botClass)
+            {
+                case BOT_CLASS_WARRIOR:
+                {
+                    //Vitality, Strength of Arms
+                    if (lvl >= 45 && m_botSpec == BOT_SPEC_WARRIOR_PROTECTION)
+                    {
+                        fval *= 1.06f;
+                    }
+
+                    if (lvl >= 40 && m_botSpec == BOT_SPEC_WARRIOR_ARMS)
+                    {
+                        fval *= 1.04f;
+                    }
+
+                    //Improved Berserker Stance part 1 (all stances)
+                    if (lvl >= 45 && m_botSpec == BOT_SPEC_WARRIOR_FURY)
+                    {
+                        fval *= 1.2f;
+                    }
+
+                    break;
+                }
+                case BOT_CLASS_PALADIN:
+                {
+                    //Divine Strength
+                    if (lvl >= 10)
+                    {
+                        fval *= 1.15f;
+                    }
+
+                    break;
+                }
+                case BOT_CLASS_DEATH_KNIGHT:
+                {
+                    //Ravenous Dead part 1
+                    //Endless Winter part 1
+                    //Veteran of the Third War part 1
+                    //Abomination's might part 2
+                    if (lvl >= 56)
+                    {
+                        fval *= 1.03f;
+                    }
+
+                    if (lvl >= 58)
+                    {
+                        fval *= 1.04f;
+                    }
+
+                    if (lvl >= 59 && m_botSpec == BOT_SPEC_DK_BLOOD)
+                    {
+                        fval *= 1.06f;
+                    }
+
+                    if (lvl >= 60 && m_botSpec == BOT_SPEC_DK_BLOOD)
+                    {
+                        fval *= 1.02f;
+                    }
+
+                    //Frost Presence passive / Improved Frost Presence
+                    if (lvl >= 61 && GetBotStance() == DEATH_KNIGHT_FROST_PRESENCE && m_botSpec == BOT_SPEC_DK_FROST)
+                    {
+                        fval *= 1.08f;
+                    }
+
+                    break;
+                }
+                case BOT_CLASS_DRUID:
+                {
+                    //Survival of the Fittest, Improved Mark of the Wild
+                    if (lvl >= 35 && m_botSpec == BOT_SPEC_DRUID_FERAL)
+                    {
+                        fval *= 1.08f;
+                    }
+                    else if (lvl >= 10)
+                    {
+                        fval *= 1.02f;
+                    }
+
+                    break;
+                }
+                default:
+                {
+                    break;
+                }
+            }
+
+            break;
+        }
+
+        case BOT_STAT_MOD_AGILITY:
+        {
+            fval += m_bot->GetTotalStatValue(STAT_AGILITY);
+
+            switch (m_botClass)
+            {
+                case BOT_CLASS_HUNTER:
+                {
+                    //Combat Experience, Lightning Reflexes
+                    if (lvl >= 35 && m_botSpec == BOT_SPEC_HUNTER_MARKSMANSHIP)
+                    {
+                        fval *= 1.04f;
+                    }
+
+                    if (lvl >= 35 && m_botSpec == BOT_SPEC_HUNTER_SURVIVAL)
+                    {
+                        fval *= 1.15f;
+                    }
+
+                    //Hunting Party
+                    if (lvl >= 35 && m_botSpec == BOT_SPEC_HUNTER_SURVIVAL)
+                    {
+                        fval *= 1.03f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_ROGUE:
+                {
+                    //Sinister Calling
+                    if (lvl >= 45 && m_botSpec == BOT_SPEC_ROGUE_SUBTLETY)
+                    {
+                        fval *= 1.15f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_DRUID:
+                {
+                    //Survival of the Fittest, Improved Mark of the Wild
+                    if (lvl >= 35 && m_botSpec == BOT_SPEC_DRUID_FERAL)
+                    {
+                        fval *= 1.08f;
+                    }
+                    else if (lvl >= 10)
+                    {
+                        fval *= 1.02f;
+                    }
+
+                    break;
+                }
+
+                default:
+                {
+                    break;
+                }
+            }
+
+            break;
+        }
+
+        case BOT_STAT_MOD_STAMINA:
+        {
+            fval += m_bot->GetTotalStatValue(STAT_STAMINA);
+
+            switch (m_botClass)
+            {
+                case BOT_CLASS_WARRIOR:
+                {
+                    //Vitality, Strength of Arms
+                    if (lvl >= 45 && m_botSpec == BOT_SPEC_WARRIOR_PROTECTION)
+                    {
+                        fval *= 1.09f;
+                    }
+
+                    if (lvl >= 40 && m_botSpec == BOT_SPEC_WARRIOR_ARMS)
+                    {
+                        fval *= 1.04f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_PALADIN:
+                {
+                    //Combat Expertise, Sacred Duty
+                    if (lvl >= 45 && m_botSpec == BOT_SPEC_PALADIN_PROTECTION)
+                    {
+                        fval *= 1.06f;
+                    }
+
+                    if (lvl >= 35 && m_botSpec == BOT_SPEC_PALADIN_PROTECTION)
+                    {
+                        fval *= 1.04f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_HUNTER:
+                {
+                    //Survivalist
+                    if (lvl >= 20)
+                    {
+                        fval *= 1.1f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_ROGUE:
+                {
+                    //Lightning Reflexes part 2
+                    if (lvl >= 25 && m_botSpec == BOT_SPEC_ROGUE_COMBAT)
+                    {
+                        fval *= 1.04f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_PRIEST:
+                {
+                    //Improved Power Word: Shield
+                    if (lvl >= 15)
+                    {
+                        fval *= 1.04f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_DEATH_KNIGHT:
+                {
+                    //Veteran of the Third War part 2
+                    if (lvl >= 59 && m_botSpec == BOT_SPEC_DK_BLOOD)
+                    {
+                        fval *= 1.03f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_WARLOCK:
+                {
+                    //Demonic Embrace: 10% stam bonus
+                    if (lvl >= 10)
+                    {
+                        fval *= 1.1f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_DRUID:
+                {
+                    if (GetBotStance() == DRUID_BEAR_FORM)
+                    {
+                        //Bear form: stamina bonus base 25%
+                        //Heart of the Wild: 10% stam bonus for bear
+                        fval *= 1.25f;
+                        if (lvl >= 35 && m_botSpec == BOT_SPEC_DRUID_FERAL)
+                            fval *= 1.1f;
+                    }
+
+                    //Survival of the Fittest, Improved Mark of the Wild
+                    if (lvl >= 35 && m_botSpec == BOT_SPEC_DRUID_FERAL)
+                    {
+                        fval *= 1.06f;
+                    }
+
+                    if (lvl >= 10)
+                    {
+                        fval *= 1.02f;
+                    }
+
+                    break;
+                }
+
+                default:
+                {
+                    break;
+                }
+            }
+
+            break;
+        }
+
+        case BOT_STAT_MOD_INTELLECT:
+        {
+            fval += m_bot->GetTotalStatValue(STAT_INTELLECT);
+
+            switch (m_botClass)
+            {
+                case BOT_CLASS_PALADIN:
+                {
+                    // Divine Intellect
+                    if (lvl >= 15)
+                    {
+                        fval *= 1.1f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_HUNTER:
+                {
+                    //Combat Experience
+                    if (lvl >= 35 && m_botSpec == BOT_SPEC_HUNTER_MARKSMANSHIP)
+                    {
+                        fval *= 1.04f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_MAGE:
+                {
+                    //Arcane Mind
+                    if (lvl >= 30 && m_botSpec == BOT_SPEC_MAGE_ARCANE)
+                    {
+                        fval *= 1.15f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_PRIEST:
+                {
+                    //Mental Strength
+                    if (lvl >= 30 && m_botSpec == BOT_SPEC_PRIEST_DISCIPLINE)
+                    {
+                        fval *= 1.15f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_SHAMAN:
+                {
+                    //Ancestral Knowledge
+                    if (lvl >= 10)
+                    {
+                        fval *= 1.1f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_DRUID:
+                {
+                    //Survival of the Fittest, Improved Mark of the Wild
+                    if (lvl >= 35 && m_botSpec == BOT_SPEC_DRUID_FERAL)
+                    {
+                        fval *= 1.08f;
+                    }
+                    else if (lvl >= 10)
+                    {
+                        fval *= 1.02f;
+                    }
+
+                    //Furor (Moonkin Form)
+                    if (GetBotStance() == DRUID_MOONKIN_FORM)
+                    {
+                        fval *= 1.1f;
+                    }
+
+                    //Heart of the Wild: ferals only (tanks included)
+                    if (lvl >= 35 && m_botSpec == BOT_SPEC_DRUID_FERAL)
+                    {
+                        fval *= 1.2f;
+                    }
+
+                    break;
+                }
+
+                default:
+                {
+                    break;
+                }
+            }
+
+            break;
+        }
+
+        case BOT_STAT_MOD_SPIRIT:
+        {
+            fval += m_bot->GetTotalStatValue(STAT_SPIRIT);
+
+            switch (m_botClass)
+            {
+                case BOT_CLASS_PRIEST:
+                {
+                    //Spirit of Redemption part 1
+                    if (lvl >= 30 && m_botSpec == BOT_SPEC_PRIEST_HOLY)
+                    {
+                        fval *= 1.05f;
+                    }
+
+                    //Enlightenment part 1
+                    if (lvl >= 35 && m_botSpec == BOT_SPEC_PRIEST_DISCIPLINE)
+                    {
+                        fval *= 1.06f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_MAGE:
+                {
+                    //Student of the Mind
+                    if (lvl >= 20)
+                    {
+                        fval *= 1.1f;
+                    }
+
+                    break;
+                }
+
+                case BOT_CLASS_DRUID:
+                {
+                    //Survival of the Fittest, Improved Mark of the Wild
+                    if (lvl >= 35 && m_botSpec == BOT_SPEC_DRUID_FERAL)
+                    {
+                        fval *= 1.08f;
+                    }
+                    else if (lvl >= 10)
+                    {
+                        fval *= 1.02f;
+                    }
+
+                    //Living Spirit
+                    if (lvl >= 40 && m_botSpec == BOT_SPEC_DRUID_RESTORATION)
+                    {
+                        fval *= 1.15f;
+                    }
+
+                    break;
+                }
+
+                default:
+                {
+                    break;
+                }
+            }
+
+            break;
+        }
+    }
+
+    return fval;
+}
+
+uint8 BotAI::GetBotStance() const
+{
+    return BOT_STANCE_NONE;
 }
 
 bool BotAI::DelayUpdateIfNeeded()
@@ -669,7 +1406,6 @@ void BotAI::UpdateBotRations()
                 }
 
                 m_isFeastMana = false;
-                UpdateMana();
             }
         }
 
@@ -713,7 +1449,7 @@ void BotAI::UpdateBotRations()
         !m_bot->IsInCombat() &&
         !m_bot->GetVehicle() &&
         !IsCasting() &&
-        GetManaPCT(m_bot) < 75 &&
+        GetManaPCT(m_bot) < 50 &&
         urand(0, 100) < 20)
     {
         m_bot->CastSpell(m_bot, GetRation(true), true);
@@ -734,14 +1470,65 @@ void BotAI::UpdateBotRations()
     }
 }
 
+void BotAI::UpdateStandState() const
+{
+    if (IAmFree())
+    {
+        if (CanSit())
+        {
+            if (!m_bot->IsInCombat() && !m_bot->isMoving() && m_bot->IsStandState() && Rand() < 15)
+            {
+                CreatureData const* data = m_bot->GetCreatureData();
+                Position pos;
+                pos.Relocate(data->posX, data->posY, data->posZ, data->orientation);
+
+                if (m_bot->GetExactDist(&pos) < 5 && m_bot->GetOrientation() == pos.GetOrientation())
+                {
+                    m_bot->SetStandState(UNIT_STAND_STATE_SIT);
+                }
+            }
+        }
+        else if (m_bot->IsSitState() && !(m_bot->GetInterruptMask() & AURA_INTERRUPT_FLAG_NOT_SEATED))
+        {
+            m_bot->SetStandState(UNIT_STAND_STATE_STAND);
+        }
+
+        return;
+    }
+
+    if (m_bot->GetVehicle())
+    {
+        return;
+    }
+
+    if ((m_owner->getStandState() == UNIT_STAND_STATE_STAND || !CanSit()) &&
+         m_bot->getStandState() == UNIT_STAND_STATE_SIT &&
+        !(m_bot->GetInterruptMask() & AURA_INTERRUPT_FLAG_NOT_SEATED))
+    {
+        m_bot->SetStandState(UNIT_STAND_STATE_STAND);
+    }
+
+    if (CanSit() && !m_bot->IsInCombat() && !m_bot->isMoving() &&
+        (m_owner->getStandState() == UNIT_STAND_STATE_SIT || (m_bot->GetInterruptMask() & AURA_INTERRUPT_FLAG_NOT_SEATED)) &&
+        m_bot->getStandState() == UNIT_STAND_STATE_STAND)
+    {
+        m_bot->SetStandState(UNIT_STAND_STATE_SIT);
+    }
+}
+
 bool BotAI::CanEat() const
 {
-    return true;
+    return m_botClass != BOT_CLASS_SPHYNX;
 }
 
 bool BotAI::CanDrink() const
 {
-    return true;
+    return m_botClass < BOT_CLASS_EX_START;
+}
+
+bool BotAI::CanSit() const
+{
+    return m_botClass < BOT_CLASS_EX_START || m_botClass == BOT_CLASS_DARK_RANGER;
 }
 
 void BotAI::SpellHit(Unit* caster, SpellInfo const* spell)
@@ -755,9 +1542,9 @@ void BotAI::SpellHit(Unit* caster, SpellInfo const* spell)
         if (spell->HasAura(SPELL_AURA_MOD_STUN) || spell->HasAura(SPELL_AURA_MOD_CONFUSE) ||
             spell->HasAura(SPELL_AURA_MOD_PACIFY) || spell->HasAura(SPELL_AURA_MOD_ROOT))
         {
-            if (Aura* cont = me->GetAura(spell->Id, caster->GetGUID()))
+            if (Aura* cont = m_bot->GetAura(spell->Id, caster->GetGUID()))
             {
-                if (AuraApplication const* aurApp = cont->GetApplicationOfTarget(me->GetGUID()))
+                if (AuraApplication const* aurApp = cont->GetApplicationOfTarget(m_bot->GetGUID()))
                 {
                     if (!aurApp->IsPositive())
                     {
@@ -779,8 +1566,13 @@ void BotAI::SpellHit(Unit* caster, SpellInfo const* spell)
     else if (spell->GetSpellSpecific() == SPELL_SPECIFIC_FOOD)
     {
         m_isFeastHealth = true;
-        UpdateHealth();
         m_regenTimer = 0;
+    }
+
+    for (uint8 i = 0; i != MAX_SPELL_EFFECTS; ++i)
+    {
+        // TODO: spell effects
+        uint32 const auraname = spell->Effects[i].ApplyAuraName;
     }
 }
 
@@ -1226,6 +2018,57 @@ void BotAI::OnBotSpellGo(Spell const* spell, bool ok)
     }
 }
 
+void BotAI::OnBotOwnerLevelChanged(uint8 newLevel, bool showLevelChange)
+{
+    CreatureTemplate const* cInfo = m_bot->GetCreatureTemplate();
+
+    m_bot->SetLevel(newLevel, showLevelChange);
+
+    m_classLevelInfo = sObjectMgr->GetCreatureBaseStats(newLevel, cInfo->unit_class);
+
+    // health
+    float healthmod = sWorld->getRate(RATE_CREATURE_ELITE_ELITE_HP);
+
+    uint32 basehp = std::max<uint32>(1, m_classLevelInfo->GenerateHealth(cInfo));
+    uint32 health = uint32(basehp * healthmod);
+
+    m_bot->SetCreateHealth(health);
+    m_bot->SetMaxHealth(health);
+    m_bot->SetHealth(health);
+    m_bot->ResetPlayerDamageReq();
+
+    // mana
+    uint32 mana = m_classLevelInfo->GenerateMana(cInfo);
+
+    m_bot->SetCreateMana(mana);
+    m_bot->SetMaxPower(POWER_MANA, mana);
+    m_bot->SetPower(POWER_MANA, mana);
+
+    m_bot->SetModifierValue(UNIT_MOD_HEALTH, BASE_VALUE, (float)health);
+    m_bot->SetModifierValue(UNIT_MOD_MANA, BASE_VALUE, (float)mana);
+
+    // damage
+    float baseDamage = m_classLevelInfo->GenerateBaseDamage(cInfo);
+
+    float weaponBaseMinDamage = baseDamage;
+    float weaponBaseMaxDamage = baseDamage * 1.5;
+
+    m_bot->SetBaseWeaponDamage(BASE_ATTACK, MINDAMAGE, weaponBaseMinDamage);
+    m_bot->SetBaseWeaponDamage(BASE_ATTACK, MAXDAMAGE, weaponBaseMaxDamage);
+
+    m_bot->SetBaseWeaponDamage(OFF_ATTACK, MINDAMAGE, weaponBaseMinDamage);
+    m_bot->SetBaseWeaponDamage(OFF_ATTACK, MAXDAMAGE, weaponBaseMaxDamage);
+
+    m_bot->SetBaseWeaponDamage(RANGED_ATTACK, MINDAMAGE, weaponBaseMinDamage);
+    m_bot->SetBaseWeaponDamage(RANGED_ATTACK, MAXDAMAGE, weaponBaseMaxDamage);
+
+    m_bot->SetModifierValue(UNIT_MOD_ATTACK_POWER, BASE_VALUE, m_classLevelInfo->AttackPower);
+    m_bot->SetModifierValue(UNIT_MOD_ATTACK_POWER_RANGED, BASE_VALUE, m_classLevelInfo->RangedAttackPower);
+
+    uint32 botClass = GetBotClass();
+    uint8 botLevel = std::min<uint8>(newLevel, 80);
+}
+
 bool BotAI::CanBotAttackOnVehicle() const
 {
     if (VehicleSeatEntry const* seat = m_bot->GetVehicle() ? m_bot->GetVehicle()->GetSeatForPassenger(m_bot) : nullptr)
@@ -1251,7 +2094,7 @@ void BotAI::Regenerate()
         m_regenTimer -= REGEN_CD;
 
         // Regen Health
-        int32 baseRegen = 0;
+        int32 baseRegen = int32(GetTotalBotStat(BOT_STAT_MOD_HEALTH_REGEN));;
 
         if (!m_bot->IsInCombat() ||
             m_bot->IsPolymorphed() ||
@@ -1517,10 +2360,10 @@ bool BotAI::BotFinishTeleport()
 {
     LOG_DEBUG("npcbots", "bot [%s] finishing teleport...", m_bot->GetName().c_str());
 
-    if (m_bot->IsAlive())
-    {
-        m_bot->CastSpell(m_bot, COSMETIC_TELEPORT_EFFECT, true);
-    }
+//    if (m_bot->IsAlive())
+//    {
+//        m_bot->CastSpell(m_bot, COSMETIC_TELEPORT_EFFECT, true);
+//    }
 
     Unit* owner = GetBotOwner();
 
@@ -1552,4 +2395,12 @@ bool BotAI::BotFinishTeleport()
     }
 
     return true;
+}
+
+bool BotAI::IsHeroExClass(uint8 botClass)
+{
+    return botClass == BOT_CLASS_BM ||
+            botClass == BOT_CLASS_ARCHMAGE ||
+            botClass == BOT_CLASS_DREADLORD ||
+            botClass == BOT_CLASS_DARK_RANGER;
 }

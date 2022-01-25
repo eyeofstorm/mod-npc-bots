@@ -109,7 +109,6 @@ public:
 
     static BotAI* GetBotAI(Creature const* /*bot*/);
     static int GetBotsCount(Unit* owner);
-    static void SetBotLevel(Creature* /*bot*/, uint8 /*level*/, bool showLevelChange = true);
 
     //onEvent hooks
     static void OnBotSpellGo(Unit const* caster, Spell const* spell, bool ok = true);

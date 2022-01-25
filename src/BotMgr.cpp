@@ -225,10 +225,10 @@ void BotMgr::HireBot(Player* owner, Creature* bot)
     bot->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
     bot->m_ControlledByPlayer = true;
 
-    BotMgr::SetBotLevel(bot, owner->getLevel(), true);
-
     if (BotAI* ai = (BotAI*)bot->AI())
     {
+        ai->OnBotOwnerLevelChanged(owner->getLevel(), true);
+
         ai->SetBotOwner(owner);
         ai->StartFollow(owner);
     }
@@ -276,55 +276,6 @@ BotAI* BotMgr::GetBotAI(Creature const* bot)
     ASSERT(bot != nullptr);
 
     return (BotAI*)bot->AI();
-}
-
-void BotMgr::SetBotLevel(Creature* bot, uint8 level, bool showLevelChange)
-{
-    CreatureTemplate const* cInfo = bot->GetCreatureTemplate();
-
-    bot->SetLevel(level, showLevelChange);
-
-    CreatureBaseStats const* stats = sObjectMgr->GetCreatureBaseStats(level, cInfo->unit_class);
-
-    // health
-    float healthmod = sWorld->getRate(RATE_CREATURE_ELITE_ELITE_HP);
-
-    uint32 basehp = std::max<uint32>(1, stats->GenerateHealth(cInfo));
-    uint32 health = uint32(basehp * healthmod);
-
-    bot->SetCreateHealth(health);
-    bot->SetMaxHealth(health);
-    bot->SetHealth(health);
-    bot->ResetPlayerDamageReq();
-
-    // mana
-    uint32 mana = stats->GenerateMana(cInfo);
-
-    bot->SetCreateMana(mana);
-    bot->SetMaxPower(POWER_MANA, mana);
-    bot->SetPower(POWER_MANA, mana);
-
-    bot->SetModifierValue(UNIT_MOD_HEALTH, BASE_VALUE, (float)health);
-    bot->SetModifierValue(UNIT_MOD_MANA, BASE_VALUE, (float)mana);
-
-    // damage
-    float baseDamage = stats->GenerateBaseDamage(cInfo);
-    float damageMod = sWorld->getRate(RATE_CREATURE_NORMAL_DAMAGE);
-
-    float weaponBaseMinDamage = baseDamage;
-    float weaponBaseMaxDamage = baseDamage * damageMod;
-
-    bot->SetBaseWeaponDamage(BASE_ATTACK, MINDAMAGE, weaponBaseMinDamage);
-    bot->SetBaseWeaponDamage(BASE_ATTACK, MAXDAMAGE, weaponBaseMaxDamage);
-
-    bot->SetBaseWeaponDamage(OFF_ATTACK, MINDAMAGE, weaponBaseMinDamage * 0.75);
-    bot->SetBaseWeaponDamage(OFF_ATTACK, MAXDAMAGE, weaponBaseMaxDamage * 0.75);
-
-    bot->SetBaseWeaponDamage(RANGED_ATTACK, MINDAMAGE, weaponBaseMinDamage);
-    bot->SetBaseWeaponDamage(RANGED_ATTACK, MAXDAMAGE, weaponBaseMaxDamage);
-
-    bot->SetModifierValue(UNIT_MOD_ATTACK_POWER, BASE_VALUE, stats->AttackPower);
-    bot->SetModifierValue(UNIT_MOD_ATTACK_POWER_RANGED, BASE_VALUE, stats->RangedAttackPower);
 }
 
 int BotMgr::GetBotsCount(Unit* owner)
@@ -491,7 +442,7 @@ bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, 
     // use the new created AI here.
     BotAI* newAI = (BotAI*)bot->AI();
 
-    LOG_INFO(
+    LOG_WARN(
          "npcbots",
          "add bot [%s] back to map [%s]. old AI(0X%016llX), new AI(0X%016llX)",
          bot->GetName().c_str(),

@@ -10,6 +10,7 @@
 #include "BotCommon.h"
 #include "EventProcessor.h"
 #include "ScriptedCreature.h"
+#include "Player.h"
 
 class BotAI : public ScriptedAI
 {
@@ -41,6 +42,9 @@ public:
     ObjectGuid GetLeaderGUID() const { return m_uiLeaderGUID; }
     void SetLeaderGUID(ObjectGuid leaderGUID) { m_uiLeaderGUID = leaderGUID; }
     uint32 GetBotSpellId(uint32 basespell) const;
+    virtual uint32 GetBotClass() const;
+    virtual uint8 GetBotStance() const;
+    float GetTotalBotStat(uint8 stat) const;
 
 public:
     void MovementInform(uint32 motionType, uint32 pointId) override;
@@ -51,7 +55,6 @@ public:
     void JustDied(Unit*) override;
     void JustRespawned() override;
     void UpdateAI(uint32) override;
-    void UpdateHealth() { m_isDoUpdateHealth = true; }
     void UpdateMana() { m_isDoUpdateMana= true; }
     void SpellHit(Unit* /*caster*/, SpellInfo const* /*spell*/) override;
 
@@ -59,6 +62,7 @@ public:
     bool OnBeforeCreatureUpdate(uint32 uiDiff);
     void OnBotOwnerMoveWorldport(Player* owner);
     void OnBotSpellGo(Spell const* spell, bool ok = true);
+    void OnBotOwnerLevelChanged(uint8 /*newLevel*/, bool showLevelChange = true);
     virtual void OnClassSpellGo(SpellInfo const* /*spell*/) { }
 
     bool BotFinishTeleport();
@@ -75,6 +79,7 @@ public:
     bool IsSpellReady(uint32 basespell, uint32 diff, bool checkGCD = true) const;
     bool CanBotAttackOnVehicle() const;
     bool CCed(Unit const* target, bool root = false);
+    static bool IsHeroExClass(uint8 botClass);
 
     void SetGlobalCooldown(uint32 gcd);
     void SetSpellCooldown(uint32 basespell, uint32 msCooldown);
@@ -119,12 +124,16 @@ protected:
     bool IsPotionSpell(uint32 spellId) const;
     virtual bool CanEat() const;
     virtual bool CanDrink() const;
+    virtual bool CanSit() const;
 
     bool AssistPlayerInCombat(Unit* who);
 
 private:
     void UpdateFollowerAI(uint32 uiDiff);
     void UpdateBotRations();
+    void UpdateStandState() const;
+    void OnManaUpdate() const;
+    void OnManaRegenUpdate() const;
     void AddBotState(uint32 uiBotState) { m_uiBotState |= uiBotState; }
     void RemoveBotState(uint32 uiBotState) { m_uiBotState &= ~uiBotState; }
     bool DelayUpdateIfNeeded();
@@ -148,6 +157,10 @@ protected:
     uint32 m_lastUpdateDiff;
     uint32 m_potionTimer;
 
+    uint32 m_botClass;
+    CreatureBaseStats const* m_classLevelInfo;
+    uint8 m_botSpec;
+
 private:
     // timer
     uint32 m_uiFollowerTimer;
@@ -161,7 +174,6 @@ private:
     BotSpellMap m_spells;
 
     bool m_isDoUpdateMana;
-    bool m_isDoUpdateHealth;
     bool m_isFeastMana;
     bool m_isFeastHealth;
 };

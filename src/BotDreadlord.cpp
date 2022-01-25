@@ -37,6 +37,18 @@ BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)
     m_bot->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_SNARE, true);
 
     m_bot->SetReactState(REACT_DEFENSIVE);
+    m_bot->setPowerType(POWER_MANA);
+
+    m_botClass = BOT_CLASS_DREADLORD;
+    m_classLevelInfo = sObjectMgr->GetCreatureBaseStats(std::min<uint8>(m_bot->getLevel(), 80), GetBotClass());
+
+    LOG_DEBUG(
+              "npcbots",
+              "bot [%s] sObjectMgr->GetCreatureBaseStats(%u, %u) => { basemana: %u }",
+              m_bot->GetName().c_str(),
+              std::min<uint8>(m_bot->getLevel(), 80),
+              GetBotClass(),
+              m_classLevelInfo->BaseMana);
 
     InitCustomeSpells();
 
@@ -305,7 +317,7 @@ bool BotDreadlordAI::DoCastDreadlordSpellSleep(uint32 diff)
     }
 
     // fleeing/casting/solo enemy
-    Unit* victim = me->GetVictim();
+    Unit* victim = m_bot->GetVictim();
     float dist = DoGetSpellMaxRange(SLEEP_1);
 
     if (victim &&
@@ -545,7 +557,7 @@ void BotDreadlordAI::SummonBotPet(const Position *pos)
             infernal->SetReactState(REACT_DEFENSIVE);
         }
 
-        BotMgr::SetBotLevel(infernal, master->getLevel(), false);
+        infernalAI->OnBotOwnerLevelChanged(master->getLevel(), false);
 
         infernalAI->SetBotOwner(dreadlord);
         infernalAI->StartFollow(dreadlord);

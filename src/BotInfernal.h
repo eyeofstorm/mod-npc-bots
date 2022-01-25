@@ -28,6 +28,7 @@ protected:
 
     bool CanEat() const override;
     bool CanDrink() const override;
+    bool CanSit() const override;
 };
 
 class BotInfernal : public CreatureScript

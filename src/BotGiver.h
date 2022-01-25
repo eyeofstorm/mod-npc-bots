@@ -24,20 +24,13 @@ enum BotGiverGossip
     GOSSIP_BOT_GIVER_HIRE_CLASS             = 9000002
 };
 
-enum BotClasses : uint8
-{
-    BOT_CLASS_NONE                      = 0,
-    BOT_CLASS_DREADLORD                 = 1,
-    BOT_CLASS_DEATH_KNIGHT              = 2,
-    BOT_CLASS_LICH                      = 3,
-
-    BOT_CLASS_END
-};
-
 class BotGiverAI : public BotAI
 {
 public:
     BotGiverAI(Creature* creature);
+
+public:
+    virtual ~BotGiverAI();
 
 protected:
     void UpdateBotCombatAI(uint32 uiDiff) override;

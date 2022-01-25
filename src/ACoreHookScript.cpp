@@ -389,9 +389,9 @@ void PlayerHookScript::OnLevelChanged(Player* player, uint8 /*oldlevel*/)
 
                 if (entry)
                 {
-                    if (Creature* bot = entry->GetBot())
+                    if (BotAI* ai = entry->GetBotAI())
                     {
-                        BotMgr::SetBotLevel(bot, newLevel, false);
+                        ai->OnBotOwnerLevelChanged(newLevel, false);
                     }
                 }
             }
@@ -430,18 +430,15 @@ void SpellHookScript::OnSpellGo(Unit const* caster, Spell const* spell, bool ok)
 
         if (player)
         {
-            if (strcmp(player->GetName().c_str(), "Felthas") == 0)
-            {
-                SpellEntry const* spellEntry = sSpellStore.LookupEntry(spell->GetSpellInfo()->Id);
+            SpellEntry const* spellEntry = sSpellStore.LookupEntry(spell->GetSpellInfo()->Id);
 
-                LOG_DEBUG(
-                    "npcbots",
-                    "bot [%s] cast spell [%u: %s] %s...",
-                    player->GetName().c_str(),
-                    spellEntry->Id,
-                    spellEntry ? spellEntry->SpellName[sWorld->GetDefaultDbcLocale()] : "unkown",
-                    ok ? "ok" : "failed");
-            }
+            LOG_DEBUG(
+                "npcbots",
+                "player [%s] cast spell [%u: %s] %s...",
+                player->GetName().c_str(),
+                spellEntry->Id,
+                spellEntry ? spellEntry->SpellName[sWorld->GetDefaultDbcLocale()] : "unkown",
+                ok ? "ok" : "failed");
         }
     }
     else if (caster->GetTypeId() == TYPEID_UNIT)

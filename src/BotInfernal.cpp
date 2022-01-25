@@ -13,6 +13,17 @@ BotInfernalAI::BotInfernalAI(Creature* creature) : BotAI(creature)
 
     m_bot->SetReactState(REACT_AGGRESSIVE);
 
+    m_botClass = BOT_CLASS_WARRIOR;
+    m_classLevelInfo = sObjectMgr->GetCreatureBaseStats(std::min<uint8>(m_bot->getLevel(), 80), GetBotClass());
+
+    LOG_DEBUG(
+          "npcbots",
+          "bot [%s] sObjectMgr->GetCreatureBaseStats(%u, %u) => { basemana: %u }",
+          m_bot->GetName().c_str(),
+          std::min<uint8>(m_bot->getLevel(), 80),
+          GetBotClass(),
+          m_classLevelInfo->BaseMana);
+
     LOG_INFO("npcbots", "↑↑↑↑↑↑ BotInfernalAI::BotInfernalAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
 }
 
@@ -44,6 +55,11 @@ bool BotInfernalAI::CanEat() const
 }
 
 bool BotInfernalAI::CanDrink() const
+{
+    return false;
+}
+
+bool BotInfernalAI::CanSit() const
 {
     return false;
 }

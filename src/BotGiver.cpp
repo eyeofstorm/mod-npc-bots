@@ -12,6 +12,28 @@
 
 BotGiverAI::BotGiverAI(Creature* creature) : BotAI(creature)
 {
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotGiverAI::BotGiverAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
+
+    m_bot->SetReactState(REACT_AGGRESSIVE);
+
+    m_botClass = BOT_CLASS_WARRIOR;
+    m_classLevelInfo = sObjectMgr->GetCreatureBaseStats(std::min<uint8>(m_bot->getLevel(), 80), GetBotClass());
+
+    LOG_DEBUG(
+          "npcbots",
+          "bot [%s] sObjectMgr->GetCreatureBaseStats(%u, %u) => { basemana: %u }",
+          m_bot->GetName().c_str(),
+          std::min<uint8>(m_bot->getLevel(), 80),
+          GetBotClass(),
+          m_classLevelInfo->BaseMana);
+
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotGiverAI::BotGiverAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
+}
+
+BotGiverAI::~BotGiverAI()
+{
+    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotGiverAI::~BotGiverAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
+    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotGiverAI::~BotGiverAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
 }
 
 void BotGiverAI::UpdateBotCombatAI(uint32 /*uiDiff*/)
@@ -80,30 +102,6 @@ bool BotGiver::OnGossipSelect(Player* player, Creature* botGiver, uint32 sender,
                         break;
                     }
 
-                    case BOT_CLASS_DEATH_KNIGHT:
-                    {
-                        AddGossipItemFor(
-                             player,
-                             GOSSIP_ICON_BATTLE,
-                             "Death knight",
-                             GOSSIP_BOT_GIVER_SENDER_HIRE_CLASS,
-                             GOSSIP_ACTION_INFO_DEF + botclass);
-
-                        break;
-                    }
-
-                    case BOT_CLASS_LICH:
-                    {
-                        AddGossipItemFor(
-                             player,
-                             GOSSIP_ICON_BATTLE,
-                             "Lich",
-                             GOSSIP_BOT_GIVER_SENDER_HIRE_CLASS,
-                             GOSSIP_ACTION_INFO_DEF + botclass);
-
-                        break;
-                    }
-
                     default:
                     {
                         textId = 0;
@@ -147,22 +145,6 @@ bool BotGiver::OnGossipSelect(Player* player, Creature* botGiver, uint32 sender,
                     {
                         BotMgr::HireBot(player, dreadlord);
                     }
-
-                    break;
-                }
-
-                case BOT_CLASS_DEATH_KNIGHT:
-                {
-                    // TODO: hire death knight
-                    LOG_WARN("npcbots", "★★★★ menu: [death knight] selected! ★★★★");
-
-                    break;
-                }
-
-                case BOT_CLASS_LICH:
-                {
-                    // TODO: hire lich
-                    LOG_WARN("npcbots", "★★★★ menu: [lich        ] selected! ★★★★");
 
                     break;
                 }
