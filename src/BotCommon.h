@@ -131,6 +131,13 @@ enum BotCommonValues
 // ADVANCED
     COSMETIC_TELEPORT_EFFECT            = 52096,    //visual instant cast omni
 
+//COMMON GAMEEVENTS
+    GAME_EVENT_WINTER_VEIL              = 2,
+
+//COMMON MOUNTS SPELLS
+    REINDEER                            = 25859,
+    REINDEER_FLY                        = 44827,
+
 // OTHERS
     BASE_MANA_SPHYNX                    = 400 * 5,
     BASE_MANA_SPELLBREAKER              = 250 * 5,
@@ -145,6 +152,9 @@ enum BotCommonValues
     BASE_MANA_1_ARCHMAGE                = 285 * 5,
     BASE_MANA_1_DREADLORD               = 270 * 5,
     BASE_MANA_1_DARK_RANGER             = 225 * 5,
+
+//COMMON SPELLS
+    SHOOT_WAND                          = 5019,
 };
 
 enum BotStatMods
@@ -279,6 +289,12 @@ enum BotPetTypes
 {
 // DREADLORD
     BOT_PET_INFERNAL                    = BOT_INFERNAL
+};
+
+enum BotMovementType
+{
+    BOT_MOVE_POINT                      = 1,
+    BOT_MOVE_CHASE
 };
 
 #define FROM_ARRAY(arr) arr, arr + sizeof(arr) / sizeof(arr[0])

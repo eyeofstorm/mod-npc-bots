@@ -11,6 +11,7 @@
 #include "BotMgr.h"
 #include "CellImpl.h"
 #include "Creature.h"
+#include "GameEventMgr.h"
 #include "GridNotifiersImpl.h"
 #include "Group.h"
 #include "Log.h"
@@ -68,6 +69,21 @@ BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
 
     m_botClass = CLASS_NONE;
     m_botSpec = BOT_SPEC_DEFAULT;
+
+    m_haste = 0;
+    m_hit = 0.f;
+    m_parry = 0.f;
+    m_dodge = 0.f;
+    m_block = 0.f;
+    m_crit = 0.f;
+    m_dmgTakenPhy = 1.f;
+    m_dmgTakenMag = 1.f;
+    m_armorPen = 0.f;
+    m_expertise = 0;
+    m_spellPower = 0;
+    m_spellPen = 0;
+    m_defense = 0;
+    m_blockValue = 1;
 
     LOG_INFO("npcbots", "↑↑↑↑↑↑ BotAI::BotAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
 }
@@ -366,11 +382,12 @@ bool BotAI::UpdateCommonBotAI(uint32 uiDiff)
 
     GenerateRand();
 
-    if (!m_bot->GetVehicle() && CCed(me))
+    if (!m_bot->GetVehicle() && CCed(m_bot))
     {
         return false;
     }
 
+    UpdateMountedState();
     UpdateStandState();
 
     return true;
@@ -617,7 +634,7 @@ inline float BotAI::GetTotalBotStat(uint8 stat) const
     int32 value = 0;
 
 // *********************************************************************
-// TODO: add equipment bonus.
+// TODO: implement this => equipment bonus.
 //    for (uint8 slot = BOT_SLOT_MAINHAND; slot != BOT_INVENTORY_SIZE; ++slot)
 //    {
 //        value += _stats[slot][stat];
@@ -1470,6 +1487,116 @@ void BotAI::UpdateBotRations()
     }
 }
 
+// MOUNT SUPPORT
+void BotAI::UpdateMountedState()
+{
+    if (IAmFree())
+    {
+        return;
+    }
+
+    bool aura = m_bot->HasAuraType(SPELL_AURA_MOUNTED);
+    bool mounted = m_bot->IsMounted() && (m_botClass != BOT_CLASS_ARCHMAGE || aura);
+
+    if (!CanMount() && !aura && !mounted)
+    {
+        return;
+    }
+
+    Unit* master = GetBotOwner();
+
+    if (((master && !master->IsMounted()) || aura != mounted) &&
+        (aura || mounted))
+    {
+        LOG_DEBUG(
+            "npcbots",
+            "bot [%s] dismount.",
+            m_bot->GetName().c_str());
+
+        const_cast<CreatureTemplate*>(m_bot->GetCreatureTemplate())->Movement.Flight = CreatureFlightMovementType::None;
+
+        m_bot->SetCanFly(false);
+        m_bot->SetDisableGravity(false);
+        m_bot->m_movementInfo.RemoveMovementFlag(MOVEMENTFLAG_FLYING);
+        m_bot->RemoveAurasByType(SPELL_AURA_MOUNTED);
+        m_bot->Dismount();
+        m_bot->RemoveUnitMovementFlag(
+                        MOVEMENTFLAG_FALLING |
+                        MOVEMENTFLAG_FALLING_FAR |
+                        MOVEMENTFLAG_PITCH_UP |
+                        MOVEMENTFLAG_PITCH_DOWN |
+                        MOVEMENTFLAG_SPLINE_ELEVATION |
+                        MOVEMENTFLAG_FALLING_SLOW);
+
+        return;
+    }
+
+    if (m_bot->IsInCombat() || m_bot->GetVehicle() || m_bot->HasUnitMovementFlag(MOVEMENTFLAG_SWIMMING) || IsCasting())
+    {
+        return;
+    }
+
+    if (master &&
+        master->IsMounted() &&
+        !m_bot->IsMounted() &&
+        !master->IsInCombat() &&
+        !m_bot->IsInCombat() &&
+        !m_bot->GetVictim())
+    {
+        uint32 mount = 0;
+        Unit::AuraEffectList const &mounts = master->GetAuraEffectsByType(SPELL_AURA_MOUNTED);
+
+        if (!mounts.empty())
+        {
+            // Winter Veil addition
+            if (sGameEventMgr->IsActiveEvent(GAME_EVENT_WINTER_VEIL))
+            {
+                mount = master->CanFly() ? REINDEER_FLY : REINDEER;
+            }
+            else
+            {
+                mount = mounts.front()->GetId();
+            }
+        }
+
+        if (mount)
+        {
+            if (m_bot->HasAuraType(SPELL_AURA_MOUNTED))
+            {
+                m_bot->RemoveAurasByType(SPELL_AURA_MOUNTED);
+            }
+
+            if (m_botClass == BOT_CLASS_DRUID && m_bot->GetShapeshiftForm() != FORM_NONE)
+            {
+                RemoveShapeshiftForm();
+            }
+
+            LOG_DEBUG(
+                "npcbots",
+                "bot [%s] before cast mount spell(id: %u)",
+                m_bot->GetName().c_str(),
+                mount);
+
+            if (DoCastSpell(m_bot, mount)) {
+
+                LOG_DEBUG(
+                    "npcbots",
+                    "bot [%s] after cast mount spell[id: %u]...OK",
+                    m_bot->GetName().c_str(),
+                    mount);
+            }
+            else
+            {
+                LOG_ERROR(
+                    "npcbots",
+                    "bot [%s] after cast mount spell[id: %u]...NG",
+                    m_bot->GetName().c_str(),
+                    mount);
+            }
+        }
+    }
+}
+
 void BotAI::UpdateStandState() const
 {
     if (IAmFree())
@@ -1531,6 +1658,21 @@ bool BotAI::CanSit() const
     return m_botClass < BOT_CLASS_EX_START || m_botClass == BOT_CLASS_DARK_RANGER;
 }
 
+bool BotAI::CanMount() const
+{
+    switch (m_botClass)
+    {
+        case BOT_CLASS_BM:
+        case BOT_CLASS_SPELLBREAKER:
+        case BOT_CLASS_DARK_RANGER:
+        case BOT_CLASS_NECROMANCER:
+        case BOT_CLASS_DREADLORD:           // TODO: [debug only] dreadlord should not mount. delete this!!!
+            return true;
+        default:
+            return m_botClass < BOT_CLASS_EX_START;
+    }
+}
+
 void BotAI::SpellHit(Unit* caster, SpellInfo const* spell)
 {
     if (!spell->IsPositive() &&
@@ -1569,10 +1711,50 @@ void BotAI::SpellHit(Unit* caster, SpellInfo const* spell)
         m_regenTimer = 0;
     }
 
+    Unit* master = GetBotOwner();
+
     for (uint8 i = 0; i != MAX_SPELL_EFFECTS; ++i)
     {
-        // TODO: spell effects
         uint32 const auraname = spell->Effects[i].ApplyAuraName;
+
+        if (auraname == SPELL_AURA_MOUNTED)
+        {
+            UnSummonBotPet();
+
+            if (master->HasAuraType(SPELL_AURA_MOD_INCREASE_VEHICLE_FLIGHT_SPEED) ||
+                master->HasAuraType(SPELL_AURA_MOD_INCREASE_MOUNTED_FLIGHT_SPEED))
+            {
+                const_cast<CreatureTemplate*>(m_bot->GetCreatureTemplate())->Movement.Flight = CreatureFlightMovementType::CanFly;
+                m_bot->SetCanFly(true);
+                m_bot->SetDisableGravity(true);
+
+                if (Aura* mount = m_bot->GetAura(spell->Id))
+                {
+                    for (uint8 j = 0; j != MAX_SPELL_EFFECTS; ++j)
+                    {
+                        if (spell->Effects[j].ApplyAuraName != SPELL_AURA_MOD_INCREASE_VEHICLE_FLIGHT_SPEED &&
+                            spell->Effects[j].ApplyAuraName != SPELL_AURA_MOD_INCREASE_MOUNTED_FLIGHT_SPEED &&
+                            spell->Effects[j].ApplyAuraName != SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED)
+                        {
+                            continue;
+                        }
+
+                        if (AuraEffect* meff = mount->GetEffect(j))
+                        {
+                            meff->ChangeAmount(meff->GetAmount() * 3);
+                        }
+                    }
+                }
+
+                m_bot->m_movementInfo.SetMovementFlags(MOVEMENTFLAG_FLYING);
+            }
+            else
+            {
+                m_bot->SetSpeedRate(MOVE_RUN, master->GetSpeedRate(MOVE_RUN) * 1.1f);
+            }
+        }
+
+        // TODO: implement this => SPELL_EFFECTS
     }
 }
 
@@ -1684,7 +1866,7 @@ Unit* BotAI::GetLeaderForFollower()
 }
 
 //This part provides assistance to a player that are attacked by who, even if out of normal aggro range
-//It will cause me to attack who that are attacking _any_ player (which has been confirmed may happen also on offi)
+//It will cause m_bot to attack who that are attacking _any_ player (which has been confirmed may happen also on offi)
 //The flag (type_flag) is unconfirmed, but used here for further research and is a good candidate.
 bool BotAI::AssistPlayerInCombat(Unit* who)
 {
@@ -2238,7 +2420,7 @@ void BotAI::DrinkPotion(bool mana)
         return;
     }
 
-    m_bot->CastSpell(me, GetPotion(mana));
+    m_bot->CastSpell(m_bot, GetPotion(mana));
 }
 
 bool BotAI::IsPotionReady() const
@@ -2297,6 +2479,34 @@ void BotAI::BotStopMovement()
 
     m_bot->StopMoving();
     m_bot->DisableSpline();
+}
+
+// Movement set
+// Uses MovePoint() for following instead of MoveFollow()
+// This helps bots overcome a bug with fanthom walls on grid borders blocking pathing
+void BotAI::BotMovement(BotMovementType type, Position const* pos, Unit* target, bool generatePath) const
+{
+    Vehicle* veh = m_bot->GetVehicle();
+    VehicleSeatEntry const* seat = veh ? veh->GetSeatForPassenger(m_bot) : nullptr;
+    bool canControl = seat ? (seat->m_flags & VEHICLE_SEAT_FLAG_CAN_CONTROL) : false;
+    Unit* mover = canControl ? veh->GetBase() : !veh ? m_bot : nullptr;
+
+    if (!mover)
+    {
+        return;
+    }
+
+    switch (type)
+    {
+        case BOT_MOVE_CHASE:
+            mover->GetMotionMaster()->MoveChase(target);
+            break;
+        case BOT_MOVE_POINT:
+            mover->GetMotionMaster()->MovePoint(mover->GetMapId(), *pos, generatePath);
+            break;
+        default:
+            return;
+    }
 }
 
 void BotAI::OnBotOwnerMoveWorldport(Player* owner)
@@ -2403,4 +2613,220 @@ bool BotAI::IsHeroExClass(uint8 botClass)
             botClass == BOT_CLASS_ARCHMAGE ||
             botClass == BOT_CLASS_DREADLORD ||
             botClass == BOT_CLASS_DARK_RANGER;
+}
+
+bool BotAI::JumpingOrFalling() const
+{
+    return Jumping() ||
+            m_bot->IsFalling() ||
+            m_bot->HasUnitMovementFlag(MOVEMENTFLAG_PITCH_UP | MOVEMENTFLAG_PITCH_DOWN | MOVEMENTFLAG_FALLING_SLOW);
+}
+
+bool BotAI::Jumping() const
+{
+    return m_bot->HasUnitState(UNIT_STATE_JUMPING);
+}
+
+bool BotAI::DoCastSpell(Unit* victim, uint32 spellId, bool triggered)
+{
+    return DoCastSpell(victim, spellId, triggered ? TRIGGERED_FULL_MASK : TRIGGERED_NONE);
+}
+
+bool BotAI::DoCastSpell(Unit* victim, uint32 spellId, TriggerCastFlags flags)
+{
+    if (spellId == 0)
+    {
+        return false;
+    }
+
+    if (!victim || !victim->IsInWorld() || m_bot->GetMap() != victim->FindMap())
+    {
+        return false;
+    }
+
+    if (IsCasting())
+    {
+        return false;
+    }
+
+    SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
+
+    if (!spellInfo)
+    {
+        return false;
+    }
+
+    // select aura level
+    if (victim->isType(TYPEMASK_UNIT))
+    {
+        if (SpellInfo const* actualSpellInfo = spellInfo->GetAuraRankForLevel(victim->getLevel()))
+        {
+            spellInfo = actualSpellInfo;
+        }
+
+        if (!spellInfo->IsTargetingArea())
+        {
+            // check if target already has the same type, but more powerful aura
+            if (spellInfo->IsStrongerAuraActive(m_bot, victim))
+            {
+                return false;
+            }
+        }
+
+        if ((flags & TRIGGERED_FULL_MASK) != TRIGGERED_FULL_MASK &&
+            !(spellInfo->AttributesEx2 & SPELL_ATTR2_IGNORE_LINE_OF_SIGHT) &&
+            !m_bot->IsWithinLOSInMap(victim))
+        {
+            return false;
+        }
+    }
+
+    // spells with cast time
+    if (m_bot->isMoving() &&
+        ((spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_MOVEMENT) || spellId == SHOOT_WAND || spellId == 48155) &&
+        !(spellInfo->Attributes & SPELL_ATTR0_ON_NEXT_SWING) &&
+        !spellInfo->IsAutoRepeatRangedSpell() &&
+        !(flags & TRIGGERED_CAST_DIRECTLY) &&
+        (spellInfo->IsChanneled() || spellInfo->CalcCastTime()))
+    {
+        if (JumpingOrFalling())
+        {
+            return false;
+        }
+
+        if (!m_bot->GetVictim() && m_bot->IsInWorld() && (m_bot->GetMap()->IsRaid() || m_bot->GetMap()->IsHeroic()))
+        {
+            return false;
+        }
+
+        if (!spellInfo->HasEffect(SPELL_EFFECT_HEAL) && Rand() > (IAmFree() ? 80 : 50))
+        {
+            return false;
+        }
+
+        LOG_WARN("npcbots", "bot [%s] stop movement. (1)", m_bot->GetName().c_str());
+        BotStopMovement();
+    }
+
+    if ((!victim->isType(TYPEMASK_UNIT)) && !victim->IsWithinLOSInMap(m_bot))
+    {
+        if (!IAmFree())
+        {
+            if (m_bot->GetDistance(victim) > 10.f)
+            {
+                Position pos = victim->GetPosition();
+                BotMovement(BOT_MOVE_POINT, &pos);
+            }
+            else
+            {
+                m_bot->Relocate(victim);
+            }
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    // remove shapeshifts manually to restore powers/stats
+    if (m_bot->GetShapeshiftForm() != FORM_NONE)
+    {
+        if (spellInfo->CheckShapeshift(m_bot->GetShapeshiftForm()) != SPELL_CAST_OK)
+        {
+            if (!RemoveShapeshiftForm())
+            {
+                return false;
+            }
+        }
+    }
+
+    // CHECKS PASSED, NOW DO IT
+
+    if (m_bot->getStandState() == UNIT_STAND_STATE_SIT &&
+        !(spellInfo->Attributes & SPELL_ATTR0_ALLOW_WHILE_SITTING))
+    {
+        if (!m_isDoUpdateMana && (m_bot->GetInterruptMask() & AURA_INTERRUPT_FLAG_NOT_SEATED))
+        {
+            UpdateMana();
+        }
+
+        m_isFeastHealth = false;
+        m_isFeastMana = false;
+        m_bot->SetStandState(UNIT_STAND_STATE_STAND);
+    }
+
+    bool triggered = (flags & TRIGGERED_CAST_DIRECTLY);
+    SpellCastTargets targets;
+    targets.SetUnitTarget(victim);
+    Spell* spell = new Spell(m_bot, spellInfo, flags);
+    spell->prepare(&targets); // sets current spell if succeed
+    bool casted = triggered; // triggered casts are casted immediately
+
+    for (uint8 i = 0; i != CURRENT_MAX_SPELL; ++i)
+    {
+        if (m_bot->GetCurrentSpell(i) == spell)
+        {
+            casted = true;
+            break;
+        }
+    }
+
+    if (triggered)
+    {
+        return true;
+    }
+
+    if (spellInfo->IsPassive() || spellInfo->IsCooldownStartedOnEvent())
+    {
+        return true;
+    }
+
+    if (!spellInfo->StartRecoveryCategory || !spellInfo->StartRecoveryTime)
+    {
+        return true;
+    }
+
+    float gcd = float(spellInfo->StartRecoveryTime);
+
+//    ApplyBotSpellGlobalCooldownMods(spellInfo, gcd);
+
+    // Apply haste to cooldown
+    if (m_haste &&
+        spellInfo->StartRecoveryCategory == 133 &&
+        spellInfo->StartRecoveryTime == 1500 &&
+        spellInfo->DmgClass != SPELL_DAMAGE_CLASS_MELEE &&
+        spellInfo->DmgClass != SPELL_DAMAGE_CLASS_RANGED &&
+        !(spellInfo->Attributes & (SPELL_ATTR0_USES_RANGED_SLOT | SPELL_ATTR0_IS_ABILITY)))
+    {
+// TODO: implement this => ApplyBotPercentModFloatVar
+//        ApplyBotPercentModFloatVar(gcd, float(m_hastehaste), false);
+    }
+
+    // if cast time is lower than 1.5 sec it also reduces gcd but only if not instant
+    if (spellInfo->CastTimeEntry)
+    {
+        if (int32 castTime = spellInfo->CastTimeEntry->CastTime)
+        {
+            if (castTime > 0)
+            {
+// TODO: implement this => ApplyClassSpellCastTimeMods
+//                ApplyClassSpellCastTimeMods(spellInfo, castTime);
+
+                if (castTime < gcd)
+                {
+                    gcd = float(castTime);
+                }
+            }
+        }
+    }
+
+    m_gcdTimer = uint32(gcd);
+
+    //global cd cannot be less than 1000 ms
+    m_gcdTimer = std::max<uint32>(m_gcdTimer, 1000);
+
+    //global cd cannot be greater than 1500 ms
+    m_gcdTimer = std::min<uint32>(m_gcdTimer, 1500);
+
+    return true;
 }

@@ -71,6 +71,7 @@ public:
     void SetFollowComplete();
     void BotStopMovement();
     Unit* GetLeaderForFollower();
+    void BotMovement(BotMovementType type, Position const* pos, Unit* target = nullptr, bool generatePath = true) const;
 
     bool HasBotState(uint32 uiBotState) { return (m_uiBotState & uiBotState); }
     bool IAmFree() const;
@@ -80,6 +81,8 @@ public:
     bool CanBotAttackOnVehicle() const;
     bool CCed(Unit const* target, bool root = false);
     static bool IsHeroExClass(uint8 botClass);
+    bool JumpingOrFalling() const;
+    bool Jumping() const;
 
     void SetGlobalCooldown(uint32 gcd);
     void SetSpellCooldown(uint32 basespell, uint32 msCooldown);
@@ -125,12 +128,19 @@ protected:
     virtual bool CanEat() const;
     virtual bool CanDrink() const;
     virtual bool CanSit() const;
+    bool CanMount() const;
 
     bool AssistPlayerInCombat(Unit* who);
+
+    bool DoCastSpell(Unit* victim, uint32 spellId, bool triggered = false);
+    bool DoCastSpell(Unit* victim, uint32 spellId, TriggerCastFlags flags);
+    SpellCastResult CheckBotCast(Unit const* victim, uint32 spellId) const;
+    virtual bool RemoveShapeshiftForm() { return true; }
 
 private:
     void UpdateFollowerAI(uint32 uiDiff);
     void UpdateBotRations();
+    void UpdateMountedState();
     void UpdateStandState() const;
     void OnManaUpdate() const;
     void OnManaRegenUpdate() const;
@@ -176,6 +186,11 @@ private:
     bool m_isDoUpdateMana;
     bool m_isFeastMana;
     bool m_isFeastHealth;
+
+    //stats
+    float m_hit, m_parry, m_dodge, m_block, m_crit, m_dmgTakenPhy, m_dmgTakenMag, m_armorPen;
+    uint32 m_expertise, m_spellPower, m_spellPen, m_defense, m_blockValue;
+    int32 m_haste, m_resistbonus[6];
 };
 
 #endif // _BOT_AI_H_
