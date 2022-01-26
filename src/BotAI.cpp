@@ -2246,9 +2246,6 @@ void BotAI::OnBotOwnerLevelChanged(uint8 newLevel, bool showLevelChange)
 
     m_bot->SetModifierValue(UNIT_MOD_ATTACK_POWER, BASE_VALUE, m_classLevelInfo->AttackPower);
     m_bot->SetModifierValue(UNIT_MOD_ATTACK_POWER_RANGED, BASE_VALUE, m_classLevelInfo->RangedAttackPower);
-
-    uint32 botClass = GetBotClass();
-    uint8 botLevel = std::min<uint8>(newLevel, 80);
 }
 
 bool BotAI::CanBotAttackOnVehicle() const
@@ -2788,6 +2785,7 @@ bool BotAI::DoCastSpell(Unit* victim, uint32 spellId, TriggerCastFlags flags)
 
     float gcd = float(spellInfo->StartRecoveryTime);
 
+// TODO: implement this => ApplyBotSpellGlobalCooldownMods
 //    ApplyBotSpellGlobalCooldownMods(spellInfo, gcd);
 
     // Apply haste to cooldown
