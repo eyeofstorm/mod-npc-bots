@@ -1505,8 +1505,7 @@ void BotAI::UpdateMountedState()
 
     Unit* master = GetBotOwner();
 
-    if (((master && !master->IsMounted()) || aura != mounted) &&
-        (aura || mounted))
+    if (((master && !master->IsMounted()) || aura != mounted) && (aura || mounted))
     {
         LOG_DEBUG(
             "npcbots",
@@ -1521,12 +1520,12 @@ void BotAI::UpdateMountedState()
         m_bot->RemoveAurasByType(SPELL_AURA_MOUNTED);
         m_bot->Dismount();
         m_bot->RemoveUnitMovementFlag(
-                        MOVEMENTFLAG_FALLING |
-                        MOVEMENTFLAG_FALLING_FAR |
-                        MOVEMENTFLAG_PITCH_UP |
-                        MOVEMENTFLAG_PITCH_DOWN |
-                        MOVEMENTFLAG_SPLINE_ELEVATION |
-                        MOVEMENTFLAG_FALLING_SLOW);
+                    MOVEMENTFLAG_FALLING |
+                    MOVEMENTFLAG_FALLING_FAR |
+                    MOVEMENTFLAG_PITCH_UP |
+                    MOVEMENTFLAG_PITCH_DOWN |
+                    MOVEMENTFLAG_SPLINE_ELEVATION |
+                    MOVEMENTFLAG_FALLING_SLOW);
 
         return;
     }
@@ -1724,7 +1723,9 @@ void BotAI::SpellHit(Unit* caster, SpellInfo const* spell)
             if (master->HasAuraType(SPELL_AURA_MOD_INCREASE_VEHICLE_FLIGHT_SPEED) ||
                 master->HasAuraType(SPELL_AURA_MOD_INCREASE_MOUNTED_FLIGHT_SPEED))
             {
-                const_cast<CreatureTemplate*>(m_bot->GetCreatureTemplate())->Movement.Flight = CreatureFlightMovementType::CanFly;
+                CreatureTemplate* creTemplate = const_cast<CreatureTemplate*>(m_bot->GetCreatureTemplate());
+                creTemplate->Movement.Flight = CreatureFlightMovementType::CanFly;
+
                 m_bot->SetCanFly(true);
                 m_bot->SetDisableGravity(true);
 
