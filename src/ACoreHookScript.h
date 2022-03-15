@@ -61,17 +61,4 @@ public:
     void OnPlayerMoveTeleport(Player* /*player*/) override;
 };
 
-//class BotCommandsScript : public CommandScript
-//{
-//public:
-//    BotCommandsScript() : CommandScript("npc_bot_commands_script") { }
-//
-//    ChatCommandTable GetCommands() const override;
-//
-//    static bool HandleBotSpawnCommand(ChatHandler* /*handler*/, uint32 /*entry*/);
-//    static bool HandleBotHireCommand(ChatHandler* /*handler*/);
-//    static bool HandleBotDismissCommand(ChatHandler* /*handler*/);
-//    static bool HandleBotMoveCommand(ChatHandler* /*handler*/, uint32 /*creatureTemplateEntry*/);
-//};
-
 #endif  // _ACORE_HOOK_SCRIPT_H

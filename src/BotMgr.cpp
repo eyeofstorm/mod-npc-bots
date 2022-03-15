@@ -37,7 +37,7 @@ void BotsRegistry::Register(BotAI* ai)
 
     LOG_WARN(
         "npcbots",
-        "register bot [GUID: %u AI: 0X%016llX  %s] to bot registry...",
+        "register bot [GUID: {} AI: 0X{:016x}  {}] to bot registry...",
         bot->GetGUID().GetCounter(),
         (unsigned long long)ai,
         bot->GetName().c_str());
@@ -69,7 +69,7 @@ void BotsRegistry::Unregister(BotAI* ai)
         {
             LOG_WARN(
                 "npcbots",
-                "bot [GUID: %u AI: 0X%016llX  %s] skip unregister from bot registry.",
+                "bot [GUID: {} AI: 0X{:016x}  {}] skip unregister from bot registry.",
                 bot->GetGUID().GetCounter(),
                 (unsigned long long)ai,
                 bot->GetName().c_str());
@@ -78,7 +78,7 @@ void BotsRegistry::Unregister(BotAI* ai)
         {
             LOG_WARN(
                 "npcbots",
-                "bot [GUID: %u AI: 0X%016llX  %s] unregister from bot registry.",
+                "bot [GUID: {} AI: 0X{:016x}  {}] unregister from bot registry.",
                 bot->GetGUID().GetCounter(),
                 (unsigned long long)ai,
                 bot->GetName().c_str());
@@ -174,7 +174,7 @@ void BotsRegistry::LogBotRegistryEntries()
 
     if (!m_botRegistry.empty())
     {
-        LOG_WARN("npcbots", "bot registry entries: %lu entries", m_botRegistry.size());
+        LOG_WARN("npcbots", "bot registry entries: {} entries", m_botRegistry.size());
 
         for (BotEntryMap::iterator itr = m_botRegistry.begin(); itr != m_botRegistry.end(); ++itr)
         {
@@ -187,7 +187,7 @@ void BotsRegistry::LogBotRegistryEntries()
 
                 LOG_WARN(
                     "npcbots",
-                    "    +-- GUID Low: %u, Entry: { name: \"%s\", owner: \"%s\", ai: 0X%016llX }",
+                    "    +-- GUID Low: {}, Entry: [ name: \"{}\", owner: \"{}\", ai: 0X{:016x} ]",
                     itr->first.GetCounter(),
                     botName.c_str(),
                     botOwnerName.c_str(),
@@ -195,7 +195,7 @@ void BotsRegistry::LogBotRegistryEntries()
             }
             else
             {
-                LOG_ERROR("npcbots","    +-- GUID Low: %u, Entry: null", itr->first.GetCounter());
+                LOG_ERROR("npcbots","    +-- GUID Low: {}, Entry: null", itr->first.GetCounter());
             }
         }
     }
@@ -213,7 +213,7 @@ void BotMgr::HireBot(Player* owner, Creature* bot)
     ASSERT(owner != nullptr);
     ASSERT(bot != nullptr);
 
-    LOG_DEBUG("npcbots", "[%s] begin hire the bot [%s].", owner->GetName().c_str(), bot->GetName().c_str());
+    LOG_DEBUG("npcbots", "[{}] begin hire the bot [{}].", owner->GetName().c_str(), bot->GetName().c_str());
 
     bot->SetOwnerGUID(owner->GetGUID());
     bot->SetCreatorGUID(owner->GetGUID());
@@ -234,19 +234,19 @@ void BotMgr::HireBot(Player* owner, Creature* bot)
     }
     else
     {
-        LOG_ERROR("npcbots", "AI of bot [%s] not found.", bot->GetName().c_str());
+        LOG_ERROR("npcbots", "AI of bot [{}] not found.", bot->GetName().c_str());
     }
 
     sBotsRegistry->LogBotRegistryEntries();
 
-    LOG_DEBUG("npcbots", "[%s] end hire the bot [%s].", owner->GetName().c_str(), bot->GetName().c_str());
+    LOG_DEBUG("npcbots", "[{}] end hire the bot [{}].", owner->GetName().c_str(), bot->GetName().c_str());
 }
 
 bool BotMgr::DismissBot(Creature* bot)
 {
     ASSERT(bot != nullptr);
 
-    LOG_DEBUG("npcbots", "begin dismiss bot [%s]", bot->GetName().c_str());
+    LOG_DEBUG("npcbots", "begin dismiss bot [{}]", bot->GetName().c_str());
 
     if (bot->IsSummon())
     {
@@ -259,13 +259,13 @@ bool BotMgr::DismissBot(Creature* bot)
 
         bot->ToTempSummon()->UnSummon();
 
-        LOG_DEBUG("npcbots", "end dismiss bot [%s]. OK...", bot->GetName().c_str());
+        LOG_DEBUG("npcbots", "end dismiss bot [{}]. OK...", bot->GetName().c_str());
 
         return true;
     }
     else
     {
-        LOG_DEBUG("npcbots", "end dismiss bot [%s]. Failed...", bot->GetName().c_str());
+        LOG_DEBUG("npcbots", "end dismiss bot [{}]. Failed...", bot->GetName().c_str());
 
         return false;
     }
@@ -399,7 +399,7 @@ bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, 
 
         LOG_INFO(
             "npcbots",
-            "remove bot [%s] from map [%s]. old AI(0X%016llX)",
+            "remove bot [%s] from map [{}]. old AI(0X{:016x})",
             bot->GetName().c_str(),
             mymap->GetMapName(),
             (unsigned long long)oldAI);
@@ -444,7 +444,7 @@ bool BotMgr::TeleportBot(Creature* bot, Map* newMap, float x, float y, float z, 
 
     LOG_WARN(
          "npcbots",
-         "add bot [%s] back to map [%s]. old AI(0X%016llX), new AI(0X%016llX)",
+         "add bot [{}] back to map [{}]. old AI(0X{:016x}), new AI(0X{:016x})",
          bot->GetName().c_str(),
          newMap->GetMapName(),
          (unsigned long long)oldAI,

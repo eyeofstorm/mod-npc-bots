@@ -14,7 +14,7 @@
 
 BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)
 {
-    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotDreadlordAI::BotDreadlordAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
+    LOG_INFO("npcbots", "BotDreadlordAI::BotDreadlordAI (this: 0X{:016x}, name: {})", (unsigned long long)this, creature->GetName().c_str());
 
     m_checkAuraTimer = 0;
     m_potionTimer = 0;
@@ -43,27 +43,27 @@ BotDreadlordAI::BotDreadlordAI(Creature* creature) : BotAI(creature)
     m_classLevelInfo = sObjectMgr->GetCreatureBaseStats(std::min<uint8>(m_bot->getLevel(), 80), GetBotClass());
 
     LOG_DEBUG(
-              "npcbots",
-              "bot [%s] sObjectMgr->GetCreatureBaseStats(%u, %u) => { basemana: %u }",
-              m_bot->GetName().c_str(),
-              std::min<uint8>(m_bot->getLevel(), 80),
-              GetBotClass(),
-              m_classLevelInfo->BaseMana);
+          "npcbots",
+          "bot [{}] sObjectMgr->GetCreatureBaseStats({}, {}) => [ basemana: {} ]",
+          m_bot->GetName().c_str(),
+          std::min<uint8>(m_bot->getLevel(), 80),
+          GetBotClass(),
+          m_classLevelInfo->BaseMana);
 
     InitCustomeSpells();
 
     sBotsRegistry->Register(this);
 
-    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotDreadlordAI::BotDreadlordAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
+    LOG_INFO("npcbots", "BotDreadlordAI::BotDreadlordAI (this: 0X{:016x}, name: {})", (unsigned long long)this, creature->GetName().c_str());
 }
 
 BotDreadlordAI::~BotDreadlordAI()
 {
-    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotDreadlordAI::~BotDreadlordAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
+    LOG_INFO("npcbots", "BotDreadlordAI::~BotDreadlordAI (this: 0X{:016x}, name: {})", (unsigned long long)this, m_bot->GetName().c_str());
 
     sBotsRegistry->Unregister(this);
 
-    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotDreadlordAI::~BotDreadlordAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
+    LOG_INFO("npcbots", "BotDreadlordAI::~BotDreadlordAI (this: 0X{:016x}, name: {})", (unsigned long long)this, m_bot->GetName().c_str());
 }
 
 void BotDreadlordAI::InitCustomeSpells()
@@ -216,13 +216,13 @@ void BotDreadlordAI::UpdateBotCombatAI(uint32 uiDiff)
     {
         if (m_bot->GetPower(POWER_MANA) < CARRION_COST)
         {
-            LOG_INFO("npcbots", "bot [%s] drink mana potion.", m_bot->GetName().c_str());
+            LOG_INFO("npcbots", "bot [{}] drink mana potion.", m_bot->GetName().c_str());
 
             DrinkPotion(true);
         }
         else if (GetHealthPCT(m_bot) < 50)
         {
-            LOG_INFO("npcbots", "bot [%s] drink health potion.", m_bot->GetName().c_str());
+            LOG_INFO("npcbots", "bot [{}] drink health potion.", m_bot->GetName().c_str());
 
             DrinkPotion(false);
         }
@@ -454,7 +454,7 @@ void BotDreadlordAI::CheckAura(uint32 uiDiff)
 
     if (!m_bot->HasAura(VAMPIRIC_AURA, m_bot->GetGUID()))
     {
-        LOG_DEBUG("npcbots", "bot [%s] refresh vampiric aura.", m_bot->GetName().c_str());
+        LOG_DEBUG("npcbots", "bot [{}] refresh vampiric aura.", m_bot->GetName().c_str());
 
         RefreshAura(VAMPIRIC_AURA, 1, m_bot);
     }
@@ -466,7 +466,7 @@ void BotDreadlordAI::RefreshAura(uint32 spellId, int8 count, Unit* target) const
     {
         LOG_ERROR(
             "npcbots", 
-            "BotDreadlordAI::RefreshAura(): count is out of bounds (%i) for bot %s (entry: %u)",
+            "BotDreadlordAI::RefreshAura(): count is out of bounds ({}) for bot {} (entry: {})",
             int32(count), 
             m_bot->GetName().c_str(),
             m_bot->GetEntry());
@@ -478,7 +478,7 @@ void BotDreadlordAI::RefreshAura(uint32 spellId, int8 count, Unit* target) const
     {
         LOG_ERROR(
             "npcbots", 
-            "BotDreadlordAI::RefreshAura(): spellId is 0 for bot %s (entry: %u)",
+            "BotDreadlordAI::RefreshAura(): spellId is 0 for bot {} (entry: {})",
             m_bot->GetName().c_str(),
             m_bot->GetEntry());
 
@@ -491,7 +491,7 @@ void BotDreadlordAI::RefreshAura(uint32 spellId, int8 count, Unit* target) const
     {
         LOG_ERROR(
             "npcbots", 
-            "BotDreadlordAI::RefreshAura(): Invalid spellInfo for spell %u! Bot - %s (entry: %u)", 
+            "BotDreadlordAI::RefreshAura(): Invalid spellInfo for spell {}! Bot - {} (entry: {})",
             spellId, 
             m_bot->GetName().c_str(),
             m_bot->GetEntry());
@@ -597,7 +597,7 @@ void BotDreadlordAI::UnSummonBotPet()
 {
     if (m_pet)
     {
-        LOG_DEBUG("npcbots", "unsummon bot [%s]...", m_pet->GetName().c_str());
+        LOG_DEBUG("npcbots", "unsummon bot [{}]...", m_pet->GetName().c_str());
 
         m_pet->ToTempSummon()->UnSummon();
     }
@@ -607,7 +607,7 @@ void BotDreadlordAI::SummonedCreatureDespawn(Creature* summon)
 {
     if (summon == m_pet)
     {
-        LOG_DEBUG("npcbots", "sumoned bot [%s] despawned...", summon->GetName().c_str());
+        LOG_DEBUG("npcbots", "sumoned bot [{}] despawned...", summon->GetName().c_str());
 
         m_pet = nullptr;
     }

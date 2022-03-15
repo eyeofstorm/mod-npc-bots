@@ -9,7 +9,7 @@
 
 BotInfernalAI::BotInfernalAI(Creature* creature) : BotAI(creature)
 {
-    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotInfernalAI::BotInfernalAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
+    LOG_INFO("npcbots", "BotInfernalAI::BotInfernalAI (this: 0X{:016x}, name: {})", (unsigned long long)this, creature->GetName().c_str());
 
     m_bot->SetReactState(REACT_AGGRESSIVE);
 
@@ -18,20 +18,20 @@ BotInfernalAI::BotInfernalAI(Creature* creature) : BotAI(creature)
 
     LOG_DEBUG(
           "npcbots",
-          "bot [%s] sObjectMgr->GetCreatureBaseStats(%u, %u) => { basemana: %u }",
+          "bot [%s] sObjectMgr->GetCreatureBaseStats({}, {}) => [ basemana: {} ]",
           m_bot->GetName().c_str(),
           std::min<uint8>(m_bot->getLevel(), 80),
           GetBotClass(),
           m_classLevelInfo->BaseMana);
 
-    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotInfernalAI::BotInfernalAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
+    LOG_INFO("npcbots", "BotInfernalAI::BotInfernalAI (this: 0X{:016x} name: {})", (unsigned long long)this, creature->GetName().c_str());
 }
 
 BotInfernalAI::~BotInfernalAI()
 {
-    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotInfernalAI::~BotInfernalAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
+    LOG_INFO("npcbots", "BotInfernalAI::~BotInfernalAI (this: 0X{:016x}, name: {})", (unsigned long long)this, m_bot->GetName().c_str());
 
-    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotInfernalAI::~BotInfernalAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
+    LOG_INFO("npcbots", "BotInfernalAI::~BotInfernalAI (this: 0X{:016x}, name: {})", (unsigned long long)this, m_bot->GetName().c_str());
 }
 
 void BotInfernalAI::UpdateBotCombatAI(uint32 /*uiDiff*/)

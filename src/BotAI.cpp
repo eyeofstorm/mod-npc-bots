@@ -31,7 +31,11 @@ static uint16 __rand; //calculated for each bot separately once every updateAI t
 
 BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
 {
-    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotAI::BotAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
+    LOG_INFO(
+        "npcbots",
+        "BotAI::BotAI (this: 0X{:016x}, name: {})",
+        (unsigned long long)this,
+        creature->GetName().c_str());
 
     m_gcdTimer = 0;
     m_uiFollowerTimer = 2500;
@@ -85,12 +89,18 @@ BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
     m_defense = 0;
     m_blockValue = 1;
 
-    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotAI::BotAI (this: 0X%016llX, name: %s)", (unsigned long long)this, creature->GetName().c_str());
+    LOG_INFO(
+        "npcbots",
+        "BotAI::BotAI (this: 0X{:016x}, name: {})",
+        (unsigned long long)this, creature->GetName().c_str());
 }
 
 BotAI::~BotAI()
 {
-    LOG_INFO("npcbots", "↓↓↓↓↓↓ BotAI::~BotAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
+    LOG_INFO(
+        "npcbots",
+        "BotAI::~BotAI (this: 0X{:016x}, name: {})",
+        (unsigned long long)this, m_bot->GetName().c_str());
 
     while (!m_spells.empty())
     {
@@ -99,7 +109,11 @@ BotAI::~BotAI()
         m_spells.erase(itr);
     }
 
-    LOG_INFO("npcbots", "↑↑↑↑↑↑ BotAI::~BotAI (this: 0X%016llX, name: %s)", (unsigned long long)this, m_bot->GetName().c_str());
+    LOG_INFO(
+        "npcbots",
+        "BotAI::~BotAI (this: 0X{:016x}, name: {})",
+        (unsigned long long)this,
+        m_bot->GetName().c_str());
 }
 
 uint32 BotAI::GetBotClass() const
@@ -131,7 +145,10 @@ void BotAI::MovementInform(uint32 motionType, uint32 pointId)
         }
         else
         {
-            LOG_DEBUG("npcbots", "bot [%s] has no owner. stop follow.", m_bot->GetName().c_str());
+            LOG_DEBUG(
+                "npcbots",
+                "bot [{}] has no owner. stop follow.",
+                m_bot->GetName().c_str());
 
             if (HasBotState(STATE_FOLLOW_INPROGRESS))
             {
@@ -185,7 +202,7 @@ void BotAI::MoveInLineOfSight(Unit* who)
             {
 //                LOG_DEBUG(
 //                    "npcbots",
-//                    "bot [%s] start assist player [%s] attack creature [%s] in LOS.",
+//                    "bot [{}] start assist player [{}] attack creature [{}] in LOS.",
 //                    m_bot->GetName().c_str(),
 //                    player->GetName().c_str(),
 //                    who->GetName().c_str());
@@ -207,7 +224,7 @@ void BotAI::MoveInLineOfSight(Unit* who)
 
 //        LOG_DEBUG(
 //              "npcbots",
-//              "bot [%s] start attack creature [%s] in LOS.",
+//              "bot [{}] start attack creature [{}] in LOS.",
 //              m_bot->GetName().c_str(),
 //              who->GetName().c_str());
 
@@ -226,7 +243,10 @@ void BotAI::EnterEvadeMode()
     {
         if (m_bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
         {
-//            LOG_DEBUG("npcbots", "bot [%s] left combat, returning to combat start position.", m_bot->GetName().c_str());
+            LOG_DEBUG(
+                "npcbots",
+                "bot [{}] left combat, returning to combat start position.",
+                m_bot->GetName().c_str());
 
             float fPosX, fPosY, fPosZ;
             m_bot->GetPosition(fPosX, fPosY, fPosZ);
@@ -238,7 +258,10 @@ void BotAI::EnterEvadeMode()
     {
         if (m_bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
         {
-//            LOG_DEBUG("npcbots", "bot [%s] left combat, returning to home.", m_bot->GetName().c_str());
+            LOG_DEBUG(
+                "npcbots",
+                "bot [{}] left combat, returning to home.",
+                m_bot->GetName().c_str());
 
             m_bot->GetMotionMaster()->MoveTargetedHome();
         }
@@ -279,8 +302,6 @@ void BotAI::JustDied(Unit* /*killer*/)
             }
         }
     }
-
-//    m_bot->DespawnOrUnsummon();
 }
 
 void BotAI::JustRespawned()
@@ -441,7 +462,7 @@ void BotAI::OnManaUpdate() const
 
     LOG_DEBUG(
         "npcbots",
-        "BotAI::OnManaUpdate() => bot [%s], m_botClass: %u, Max mana: %u, m_classLevelInfo->BaseMana: %u, pct: %.2f, baseMana: %.2f",
+        "BotAI::OnManaUpdate() => bot [{}], m_botClass: {}, Max mana: {}, m_classLevelInfo->BaseMana: {}, pct: {:.2f}, baseMana: {:.2f}",
         m_bot->GetName().c_str(),
         m_botClass,
         m_bot->GetMaxPower(POWER_MANA),
@@ -479,7 +500,7 @@ void BotAI::OnManaUpdate() const
 
     LOG_DEBUG(
         "npcbots",
-        "BotAI::OnManaUpdate() => bot [%s], (1) intellectValue: %.2f, intellectMult: %.2f, baseMana: %.2f",
+        "BotAI::OnManaUpdate() => bot [{}], (1) intellectValue: {:.2f}, intellectMult: {:.2f}, baseMana: {:.2f}",
         m_bot->GetName().c_str(),
         intellectValue,
         intellectMult,
@@ -495,7 +516,7 @@ void BotAI::OnManaUpdate() const
 
     LOG_DEBUG(
         "npcbots",
-        "BotAI::OnManaUpdate() => bot [%s], (2) Max mana: %u, Current Mana: %u",
+        "BotAI::OnManaUpdate() => bot [{}], (2) Max mana: {}, Current Mana: {}",
         m_bot->GetName().c_str(),
         m_bot->GetMaxPower(POWER_MANA),
         m_bot->GetPower(POWER_MANA));
@@ -504,7 +525,7 @@ void BotAI::OnManaUpdate() const
 
     LOG_DEBUG(
         "npcbots",
-        "BotAI::OnManaUpdate() => bot [%s], (3) Max mana: %u, Current Mana: %u",
+        "BotAI::OnManaUpdate() => bot [{}], (3) Max mana: {}, Current Mana: {}",
         m_bot->GetName().c_str(),
         m_bot->GetMaxPower(POWER_MANA),
         m_bot->GetPower(POWER_MANA));
@@ -1274,7 +1295,7 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
 
                 if (HasBotState(STATE_FOLLOW_RETURNING))
                 {
-//                    LOG_DEBUG("npcbots", "bot [%s] is returning to leader.", m_bot->GetName().c_str());
+                    LOG_DEBUG("npcbots", "bot [{}] is returning to leader.", m_bot->GetName().c_str());
 
                     RemoveBotState(STATE_FOLLOW_RETURNING);
                     m_bot->GetMotionMaster()->MoveFollow(leader, BOT_FOLLOW_DIST, BOT_FOLLOW_ANGLE);
@@ -1326,7 +1347,7 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
                 {
                     LOG_DEBUG(
                         "npcbots",
-                        "bot [%s] was too far away from leader [%s].",
+                        "bot [{}] was too far away from leader [{}].",
                         m_bot->GetName().c_str(),
                         leader->GetName().c_str());
 
@@ -1338,7 +1359,7 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
                         float x, y, z, o;
                         player->GetPosition(x, y, z, o);
 
-                        LOG_DEBUG("npcbots", "bot [%s] is teleporting to leader.", m_bot->GetName().c_str());
+                        LOG_DEBUG("npcbots", "bot [{}] is teleporting to leader.", m_bot->GetName().c_str());
                         BotMgr::TeleportBot(m_bot, player->GetMap(), x, y, z, o);
                     }
                     else
@@ -1361,7 +1382,7 @@ void BotAI::UpdateFollowerAI(uint32 uiDiff)
     }
     else if (HasBotState(STATE_FOLLOW_COMPLETE))
     {
-        LOG_DEBUG("npcbots", "bot [%s] is set completed, despawns.", m_bot->GetName().c_str());
+        LOG_DEBUG("npcbots", "bot [{}] is set completed, despawns.", m_bot->GetName().c_str());
 
         m_bot->DespawnOrUnsummon();
 
@@ -1509,7 +1530,7 @@ void BotAI::UpdateMountedState()
     {
         LOG_DEBUG(
             "npcbots",
-            "bot [%s] dismount.",
+            "bot [{}] dismount.",
             m_bot->GetName().c_str());
 
         const_cast<CreatureTemplate*>(m_bot->GetCreatureTemplate())->Movement.Flight = CreatureFlightMovementType::None;
@@ -1572,7 +1593,7 @@ void BotAI::UpdateMountedState()
 
             LOG_DEBUG(
                 "npcbots",
-                "bot [%s] before cast mount spell(id: %u)",
+                "bot [{}] before cast mount spell(id: {})",
                 m_bot->GetName().c_str(),
                 mount);
 
@@ -1580,7 +1601,7 @@ void BotAI::UpdateMountedState()
 
                 LOG_DEBUG(
                     "npcbots",
-                    "bot [%s] after cast mount spell[id: %u]...OK",
+                    "bot [{}] after cast mount spell[id: {}]...OK",
                     m_bot->GetName().c_str(),
                     mount);
             }
@@ -1588,7 +1609,7 @@ void BotAI::UpdateMountedState()
             {
                 LOG_ERROR(
                     "npcbots",
-                    "bot [%s] after cast mount spell[id: %u]...NG",
+                    "bot [{}] after cast mount spell[id: {}]...NG",
                     m_bot->GetName().c_str(),
                     mount);
             }
@@ -1763,7 +1784,7 @@ void BotAI::StartFollow(Unit* leader, uint32 factionForFollower)
 {
     if (HasBotState(STATE_FOLLOW_INPROGRESS))
     {
-        LOG_WARN("npcbots", "bot [%s] attempt to StartFollow while already following.", m_bot->GetName().c_str());
+        LOG_WARN("npcbots", "bot [{}] attempt to StartFollow while already following.", m_bot->GetName().c_str());
         return;
     }
 
@@ -1785,7 +1806,7 @@ void BotAI::StartFollow(Unit* leader, uint32 factionForFollower)
         m_bot->GetMotionMaster()->Clear();
         m_bot->GetMotionMaster()->MoveIdle();
 
-        LOG_DEBUG("npcbots", "bot [%s] start with WAYPOINT_MOTION_TYPE, set to MoveIdle.", m_bot->GetName().c_str());
+        LOG_DEBUG("npcbots", "bot [{}] start with WAYPOINT_MOTION_TYPE, set to MoveIdle.", m_bot->GetName().c_str());
     }
 
     AddBotState(STATE_FOLLOW_INPROGRESS);
@@ -1797,7 +1818,7 @@ void BotAI::StartFollow(Unit* leader, uint32 factionForFollower)
         m_bot->GetMotionMaster()->MoveChase(victim);
 
         LOG_DEBUG(
-            "npcbots", "bot [%s] will following player [%s] when enter evade mode.",
+            "npcbots", "bot [{}] will following player [{}] when enter evade mode.",
             m_bot->GetName().c_str(),
             leader->GetName().c_str());
     }
@@ -1806,7 +1827,7 @@ void BotAI::StartFollow(Unit* leader, uint32 factionForFollower)
         m_bot->GetMotionMaster()->MoveFollow(leader, BOT_FOLLOW_DIST, BOT_FOLLOW_ANGLE);
 
         LOG_DEBUG(
-            "npcbots", "bot [%s] start follow [%s].",
+            "npcbots", "bot [{}] start follow [{}].",
             m_bot->GetName().c_str(),
             leader->GetName().c_str());
     }
@@ -2091,7 +2112,7 @@ void BotAI::InitSpellMap(uint32 basespell, bool forceadd, bool forwardRank)
 
     if (!info)
     {
-        LOG_ERROR("npcbots", "BotAI::InitSpellMap(): No SpellInfo found for base spell %u", basespell);
+        LOG_ERROR("npcbots", "BotAI::InitSpellMap(): No SpellInfo found for base spell {}", basespell);
         return; //invalid spell id
     }
 
@@ -2550,7 +2571,7 @@ void BotAI::OnBotOwnerMoveWorldport(Player* owner)
 
         LOG_DEBUG(
             "npcbots",
-            "bot [Name: %s, IsInWorld: %s, Map: %s, IsDungeon: %s, IsAlive: %s, IsFollowed: %s] cannot worldport to player [%s] in [%s, %s, %s].",
+            "bot [Name: {}, IsInWorld: {}, Map: {}, IsDungeon: {}, IsAlive: {}, IsFollowed: {}] cannot worldport to player [{}] in [{}, {}, {}].",
             m_bot->GetName().c_str(),
             m_bot->IsInWorld() ? "true" : "false",
             botCurMap ? botCurMap->GetMapName() : "unknown",
@@ -2566,12 +2587,7 @@ void BotAI::OnBotOwnerMoveWorldport(Player* owner)
 
 bool BotAI::BotFinishTeleport()
 {
-    LOG_DEBUG("npcbots", "bot [%s] finishing teleport...", m_bot->GetName().c_str());
-
-//    if (m_bot->IsAlive())
-//    {
-//        m_bot->CastSpell(m_bot, COSMETIC_TELEPORT_EFFECT, true);
-//    }
+    LOG_DEBUG("npcbots", "bot [{}] finishing teleport...", m_bot->GetName().c_str());
 
     Unit* owner = GetBotOwner();
 
@@ -2702,7 +2718,7 @@ bool BotAI::DoCastSpell(Unit* victim, uint32 spellId, TriggerCastFlags flags)
             return false;
         }
 
-        LOG_WARN("npcbots", "bot [%s] stop movement. (1)", m_bot->GetName().c_str());
+        LOG_WARN("npcbots", "bot [{}] stop movement. (1)", m_bot->GetName().c_str());
         BotStopMovement();
     }
 

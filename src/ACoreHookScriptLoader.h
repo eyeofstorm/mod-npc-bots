@@ -26,7 +26,6 @@ void AddNpcbotsScripts()
     new UnitHookScript();
     new CreatureHookScript();
     new SpellHookScript();
-//  new BotCommandsScript();
     new MovementHandlerHookScript();
 
     //**************
