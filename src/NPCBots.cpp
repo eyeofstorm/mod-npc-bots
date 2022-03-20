@@ -4,13 +4,13 @@
  * License: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
  */
 
-#include NPCBots.h
+#include "NPCBots.h"
 
 //***********************
 // Add all scripts in one
 //***********************
 
-void AddNpcbotsScripts()
+void AddNPCBotsScripts()
 {
     //*******************
     // acore hook scripts
