@@ -429,7 +429,7 @@ void BotAI::OnManaUpdate() const
 
     if (m_botClass == BOT_CLASS_BM)
     {
-        baseMana = BASE_MANA_1_BM + (BASE_MANA_10_BM - BASE_MANA_1_BM) * (mylevel / 81.f);
+        baseMana = (float)BASE_MANA_1_BM + (BASE_MANA_10_BM - BASE_MANA_1_BM) * (mylevel / 81.f);
     }
     else if (m_botClass == BOT_CLASS_SPHYNX)
     {
@@ -437,11 +437,11 @@ void BotAI::OnManaUpdate() const
     }
     else if (m_botClass == BOT_CLASS_ARCHMAGE)
     {
-        baseMana = BASE_MANA_1_ARCHMAGE + (BASE_MANA_10_ARCHMAGE - BASE_MANA_1_ARCHMAGE) * ((mylevel - 20) / 81.f);
+        baseMana = (float)BASE_MANA_1_ARCHMAGE + (BASE_MANA_10_ARCHMAGE - BASE_MANA_1_ARCHMAGE) * ((mylevel - 20) / 81.f);
     }
     else if (m_botClass == BOT_CLASS_DREADLORD)
     {
-        baseMana = BASE_MANA_1_DREADLORD + (BASE_MANA_10_DREADLORD - BASE_MANA_1_DREADLORD) * ((mylevel - 60) / 83.f);
+        baseMana = (float)BASE_MANA_1_DREADLORD + (BASE_MANA_10_DREADLORD - BASE_MANA_1_DREADLORD) * ((mylevel - 60) / 83.f);
     }
     else if (m_botClass == BOT_CLASS_SPELLBREAKER)
     {
@@ -449,7 +449,7 @@ void BotAI::OnManaUpdate() const
     }
     else if (m_botClass == BOT_CLASS_DARK_RANGER)
     {
-        baseMana = BASE_MANA_1_DARK_RANGER + (BASE_MANA_10_DARK_RANGER - BASE_MANA_1_DARK_RANGER) * ((mylevel - 40) / 82.f);
+        baseMana = (float)BASE_MANA_1_DARK_RANGER + (BASE_MANA_10_DARK_RANGER - BASE_MANA_1_DARK_RANGER) * ((mylevel - 40) / 82.f);
     }
     else if (m_botClass == BOT_CLASS_NECROMANCER)
     {
@@ -2363,7 +2363,7 @@ void BotAI::Regenerate()
                 addvalue = m_bot->GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER);
             }
 
-            addvalue *= sWorld->getRate(RATE_POWER_MANA) * REGEN_CD * 0.001f; //regenTimer threshold / 1000
+            addvalue *= sWorld->getRate(RATE_POWER_MANA) * (float)REGEN_CD * 0.001f; //regenTimer threshold / 1000
 
             if (addvalue < 0.0f)
             {
@@ -2422,7 +2422,7 @@ void BotAI::RegenerateEnergy()
         }
         else
         {
-            m_bot->UpdateUInt32Value(UNIT_FIELD_POWER1 + POWER_ENERGY, curValue);
+            m_bot->UpdateUInt32Value((uint16)UNIT_FIELD_POWER1 + (uint32)POWER_ENERGY, curValue);
         }
     }
 }

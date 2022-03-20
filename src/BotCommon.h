@@ -110,7 +110,7 @@ enum BotClasses : uint32
 
 #define BOT_CLASS_EX_START BOT_CLASS_BM
 
-enum BotCommonValues
+enum BotCommonValues : uint32
 {
 // DREADLORD
     SPELL_VAMPIRIC_AURA                 = 20810,
