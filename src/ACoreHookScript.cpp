@@ -78,7 +78,7 @@ void PlayerHookScript::OnLevelChanged(Player* player, uint8 /*oldlevel*/)
                 {
                     if (BotAI* ai = entry->GetBotAI())
                     {
-                        ai->OnBotOwnerLevelChanged(newLevel, false);
+                        ai->OnBotOwnerLevelChanged(newLevel, true);
                     }
                 }
             }
@@ -104,8 +104,15 @@ bool CreatureHookScript::OnBeforeCreatureUpdate(Creature* creature, uint32 diff)
     return true;
 }
 
-void SpellHookScript::OnSpellGo(Unit const* caster, Spell const* spell, bool ok)
+void SpellHookScript::OnSpellGo(Spell const* spell, bool ok)
 {
+    if (!spell)
+    {
+        return;
+    }
+
+    Unit const* caster = spell->GetCaster();
+
     if (!caster)
     {
         return;

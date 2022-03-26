@@ -48,7 +48,7 @@ public:
     SpellHookScript() : SpellSC("npc_bots_spell_hook") { }
     
 public:
-    void OnSpellGo(Unit const* /*caster*/, Spell const* /*spell*/, bool /*ok*/) override;
+    void OnSpellGo(Spell const* /*spell*/, bool /*ok*/) override;
 };
 
 class MovementHandlerHookScript : public MovementHandlerScript
