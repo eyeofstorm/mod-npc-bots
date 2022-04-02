@@ -1526,7 +1526,7 @@ void BotAI::UpdateMountedState()
 
     Unit* master = GetBotOwner();
 
-    if (((master && !master->IsMounted()) || aura != mounted) && (aura || mounted))
+    if (((master && !master->IsMounted()) || aura != mounted) && (aura || mounted || (m_botClass == BOT_CLASS_DREADLORD && m_bot->IsFlying())))
     {
         LOG_DEBUG(
             "npcbots",
@@ -1539,7 +1539,12 @@ void BotAI::UpdateMountedState()
         m_bot->SetDisableGravity(false);
         m_bot->m_movementInfo.RemoveMovementFlag(MOVEMENTFLAG_FLYING);
         m_bot->RemoveAurasByType(SPELL_AURA_MOUNTED);
-        m_bot->Dismount();
+
+        if (m_botClass != BOT_CLASS_DREADLORD)
+        {
+            m_bot->Dismount();
+        }
+
         m_bot->RemoveUnitMovementFlag(
                     MOVEMENTFLAG_FALLING |
                     MOVEMENTFLAG_FALLING_FAR |
@@ -1563,7 +1568,7 @@ void BotAI::UpdateMountedState()
         !m_bot->IsInCombat() &&
         !m_bot->GetVictim())
     {
-        uint32 mount = 0;
+        uint32 mountID = 0;
         Unit::AuraEffectList const &mounts = master->GetAuraEffectsByType(SPELL_AURA_MOUNTED);
 
         if (!mounts.empty())
@@ -1571,15 +1576,15 @@ void BotAI::UpdateMountedState()
             // Winter Veil addition
             if (sGameEventMgr->IsActiveEvent(GAME_EVENT_WINTER_VEIL))
             {
-                mount = master->CanFly() ? REINDEER_FLY : REINDEER;
+                mountID = master->CanFly() ? (uint32)REINDEER_FLY : (uint32)REINDEER;
             }
             else
             {
-                mount = mounts.front()->GetId();
+                mountID = mounts.front()->GetId();
             }
         }
 
-        if (mount)
+        if (mountID)
         {
             if (m_bot->HasAuraType(SPELL_AURA_MOUNTED))
             {
@@ -1591,27 +1596,45 @@ void BotAI::UpdateMountedState()
                 RemoveShapeshiftForm();
             }
 
-            LOG_DEBUG(
-                "npcbots",
-                "bot [{}] before cast mount spell(id: {})",
-                m_bot->GetName().c_str(),
-                mount);
-
-            if (DoCastSpell(m_bot, mount)) {
-
+            if (m_botClass != BOT_CLASS_DREADLORD)
+            {
                 LOG_DEBUG(
                     "npcbots",
-                    "bot [{}] after cast mount spell[id: {}]...OK",
+                    "bot [{}] before cast mount spell(id: {})",
                     m_bot->GetName().c_str(),
-                    mount);
+                    mountID);
+
+                if (DoCastSpell(m_bot, mountID))
+                {
+                    LOG_DEBUG(
+                        "npcbots",
+                        "bot [{}] after cast mount spell[id: {}]...OK",
+                        m_bot->GetName().c_str(),
+                        mountID);
+                }
+                else
+                {
+                    LOG_ERROR(
+                        "npcbots",
+                        "bot [{}] after cast mount spell[id: {}]...NG",
+                        m_bot->GetName().c_str(),
+                        mountID);
+                }
             }
             else
             {
-                LOG_ERROR(
-                    "npcbots",
-                    "bot [{}] after cast mount spell[id: {}]...NG",
-                    m_bot->GetName().c_str(),
-                    mount);
+                UnSummonBotPet();
+
+                if (master->HasAuraType(SPELL_AURA_MOD_INCREASE_VEHICLE_FLIGHT_SPEED) ||
+                    master->HasAuraType(SPELL_AURA_MOD_INCREASE_MOUNTED_FLIGHT_SPEED))
+                {
+                    CreatureTemplate* creTemplate = const_cast<CreatureTemplate*>(m_bot->GetCreatureTemplate());
+                    creTemplate->Movement.Flight = CreatureFlightMovementType::CanFly;
+
+                    m_bot->SetCanFly(true);
+                    m_bot->SetDisableGravity(true);
+                    m_bot->m_movementInfo.SetMovementFlags(MOVEMENTFLAG_FLYING);
+                }
             }
         }
     }
@@ -1686,7 +1709,7 @@ bool BotAI::CanMount() const
         case BOT_CLASS_SPELLBREAKER:
         case BOT_CLASS_DARK_RANGER:
         case BOT_CLASS_NECROMANCER:
-        case BOT_CLASS_DREADLORD:           // TODO: [debug only] dreadlord should not mount. delete this!!!
+        case BOT_CLASS_DREADLORD:
             return true;
         default:
             return m_botClass < BOT_CLASS_EX_START;

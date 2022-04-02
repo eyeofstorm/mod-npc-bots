@@ -126,13 +126,16 @@ void SpellHookScript::OnSpellGo(Spell const* spell, bool ok)
         {
             SpellEntry const* spellEntry = sSpellStore.LookupEntry(spell->GetSpellInfo()->Id);
 
-            LOG_DEBUG(
-                "npcbots",
-                "player [{}] cast spell [{}: {}] {}...",
-                player->GetName().c_str(),
-                spellEntry->Id,
-                spellEntry ? spellEntry->SpellName[sWorld->GetDefaultDbcLocale()] : "unkown",
-                ok ? "ok" : "failed");
+            if (spellEntry)
+            {
+                LOG_DEBUG(
+                    "npcbots",
+                    "player [{}] cast spell [{}: {}] {}...",
+                    player->GetName().c_str(),
+                    spellEntry->Id,
+                    spellEntry ? spellEntry->SpellName[sWorld->GetDefaultDbcLocale()] : "unkown",
+                    ok ? "ok" : "failed");
+            }
         }
     }
     else if (caster->GetTypeId() == TYPEID_UNIT)
@@ -145,13 +148,16 @@ void SpellHookScript::OnSpellGo(Spell const* spell, bool ok)
             {
                 SpellEntry const* spellEntry = sSpellStore.LookupEntry(spell->GetSpellInfo()->Id);
 
-                LOG_DEBUG(
-                    "npcbots",
-                    "bot [{}] cast spell [id: {} {}] {}...",
-                    creature->GetName().c_str(),
-                    spellEntry->Id,
-                    spellEntry ? spellEntry->SpellName[sWorld->GetDefaultDbcLocale()] : "unkown",
-                    ok ? "ok" : "failed");
+                if (spellEntry)
+                {
+                    LOG_DEBUG(
+                        "npcbots",
+                        "bot [{}] cast spell [id: {} {}] {}...",
+                        creature->GetName().c_str(),
+                        spellEntry->Id,
+                        spellEntry ? spellEntry->SpellName[sWorld->GetDefaultDbcLocale()] : "unkown",
+                        ok ? "ok" : "failed");
+                }
 
                 BotMgr::OnBotSpellGo(creature, spell, ok);
             }
