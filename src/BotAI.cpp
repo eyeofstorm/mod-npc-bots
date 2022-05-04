@@ -233,7 +233,7 @@ void BotAI::MoveInLineOfSight(Unit* who)
     }
 }
 
-void BotAI::EnterEvadeMode()
+void BotAI::EnterEvadeMode(EvadeReason why)
 {
     m_bot->RemoveAllAuras();
     m_bot->DeleteThreatList();
