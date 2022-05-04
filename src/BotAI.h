@@ -25,7 +25,8 @@ public:
 private:
     struct BotSpell
     {
-        explicit BotSpell() : cooldown(0), enabled(true) { }
+        explicit BotSpell() : spellId(0), cooldown(0), enabled(true) { }
+
         uint32 spellId;
         uint32 cooldown;
         bool enabled;

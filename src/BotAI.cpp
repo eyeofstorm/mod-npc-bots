@@ -72,6 +72,7 @@ BotAI::BotAI(Creature* creature) : ScriptedAI(creature)
     m_isDoUpdateMana = false;
 
     m_botClass = CLASS_NONE;
+    m_classLevelInfo = nullptr;
     m_botSpec = BOT_SPEC_DEFAULT;
 
     m_haste = 0;
@@ -1799,7 +1800,126 @@ void BotAI::SpellHit(Unit* caster, SpellInfo const* spell)
             }
         }
 
-        // TODO: implement this => SPELL_EFFECTS
+        // update stats
+        if (auraname == SPELL_AURA_MOD_STAT || auraname == SPELL_AURA_MOD_PERCENT_STAT ||
+            auraname == SPELL_AURA_MOD_TOTAL_STAT_PERCENTAGE || auraname == SPELL_AURA_MOD_SKILL ||
+            auraname == SPELL_AURA_MOD_ATTACK_POWER || auraname == SPELL_AURA_MOD_ATTACK_POWER_PCT ||
+            auraname == SPELL_AURA_MOD_ATTACK_POWER_OF_STAT_PERCENT || auraname == SPELL_AURA_MOD_ATTACK_POWER_OF_ARMOR ||
+            auraname == SPELL_AURA_MOD_SPELL_DAMAGE_OF_STAT_PERCENT ||
+            auraname == SPELL_AURA_MOD_RATING || auraname == SPELL_AURA_MOD_RATING_FROM_STAT)
+        {
+            // TODO: implement this => shouldUpdateStats
+            //shouldUpdateStats = true;
+        }
+        else if (auraname == SPELL_AURA_MOD_INCREASE_HEALTH ||
+            auraname == SPELL_AURA_MOD_INCREASE_HEALTH_2 ||
+            auraname == SPELL_AURA_230 ||
+            auraname == SPELL_AURA_MOD_INCREASE_HEALTH_PERCENT)
+        {
+            // TODO: implement this => BotAI::UpdateHealth()
+            //UpdateHealth();
+        }
+        else if (auraname == SPELL_AURA_MOD_INCREASE_ENERGY || auraname == SPELL_AURA_MOD_INCREASE_ENERGY_PERCENT)
+        {
+            UpdateMana(); //Divine Hymn - max mana increase
+        }
+
+        uint32 const effect = spell->Effects[i].Effect;
+
+        if (effect == SPELL_EFFECT_RESURRECT ||
+            effect == SPELL_EFFECT_RESURRECT_NEW ||
+            effect == SPELL_EFFECT_SELF_RESURRECT)
+        {
+            // resurrect effects are not handled for creatures
+            if (!m_bot->IsAlive())
+            {
+                uint32 health = 0;
+                uint32 mana = 0;
+                int32 damage = spell->Effects[i].BasePoints;
+
+                if (effect == SPELL_EFFECT_RESURRECT_NEW)
+                {
+                    // Glyph of Rebirth: resurrect with 100% health
+                    if (spell->IsRankOf(sSpellMgr->GetSpellInfo(20484)))
+                    {
+                        health = m_bot->GetMaxHealth();
+                    }
+                    else
+                    {
+                        health = damage;
+                    }
+
+                    mana = spell->Effects[i].MiscValue;
+                }
+                else if (damage < 0)
+                {
+                    health = uint32(-damage);
+                    mana = spell->Effects[i].MiscValue;
+                }
+                else
+                {
+                    health = m_bot->CountPctFromMaxHealth(damage);
+
+                    if (m_bot->GetMaxPower(POWER_MANA) > 1)
+                    {
+                        mana = CalculatePct(me->GetMaxPower(POWER_MANA), damage);
+                    }
+                }
+
+                // TODO: implement this => BotMgr::ReviveBot(...)
+                //BotMgr::ReviveBot(m_bot, caster);
+
+                m_bot->SetHealth(health);
+
+                if (m_bot->GetMaxPower(POWER_MANA) > 1)
+                {
+                    m_bot->SetPower(POWER_MANA, mana);
+                }
+            }
+        }
+
+        // TODO: implement this => SPELL_EFFECT_ENCHANT_HELD_ITEM
+        /*
+        //ravasaur poison (EffectEnchantHeldItem) for mh and oh
+        if (effect == SPELL_EFFECT_ENCHANT_HELD_ITEM)
+        {
+            uint32 enchant_id = spell->Effects[i].MiscValue;
+
+            if (!enchant_id)
+            {
+                continue;
+            }
+
+            EnchantmentSlot slot = TEMP_ENCHANTMENT_SLOT;
+            Item* weap = _equips[BOT_SLOT_MAINHAND];
+
+            if (!weap || weap->GetEnchantmentId(slot))
+                weap = _equips[BOT_SLOT_OFFHAND];
+
+            if (!weap || weap->GetTemplate()->Class != ITEM_CLASS_WEAPON || weap->GetEnchantmentId(slot))
+            {
+                continue;
+            }
+
+            int32 duration = spell->GetDuration();
+
+            if (!duration)
+            {
+                duration = 10; //10 sec default
+            }
+
+            if (!IAmFree())
+            {
+                master->GetSession()->SendEnchantmentLog(me->GetGUID(), caster->GetGUID(), weap->GetEntry(), enchant_id);
+            }
+
+            weap->SetUInt32Value(ITEM_FIELD_ENCHANTMENT_1_1 + slot * MAX_ENCHANTMENT_OFFSET + ENCHANTMENT_ID_OFFSET, enchant_id);
+            weap->SetUInt32Value(ITEM_FIELD_ENCHANTMENT_1_1 + slot * MAX_ENCHANTMENT_OFFSET + ENCHANTMENT_DURATION_OFFSET, duration * IN_MILLISECONDS);
+            weap->SetUInt32Value(ITEM_FIELD_ENCHANTMENT_1_1 + slot * MAX_ENCHANTMENT_OFFSET + ENCHANTMENT_CHARGES_OFFSET, 0);
+
+            ApplyItemBonuses(weap == _equips[BOT_SLOT_MAINHAND] ? BOT_SLOT_MAINHAND : BOT_SLOT_OFFHAND);
+        }
+        */
     }
 }
 
